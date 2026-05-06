@@ -1,0 +1,310 @@
+.tree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 0;
+  gap: 2px;
+}
+
+/* ─── "All files" root button ──────────────────────────────────────────────── */
+
+.rootItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background-color var(--transition);
+  flex-shrink: 0;
+}
+
+.rootItem:hover {
+  background-color: color-mix(in srgb, var(--accent-interactive) 10%, transparent);
+}
+
+.rootItemActive {
+  background-color: color-mix(in srgb, var(--accent-interactive) 20%, transparent);
+  color: var(--accent-interactive);
+  font-weight: 600;
+}
+
+/* ─── Top-level folder list ─────────────────────────────────────────────────── */
+
+.rootList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+}
+
+/* ─── Tree item (li) ────────────────────────────────────────────────────────── */
+
+.treeItem {
+  position: relative;
+}
+
+.treeItemActive > .treeRow {
+  background-color: color-mix(in srgb, var(--accent-interactive) 18%, transparent);
+}
+
+.treeItemDragging > .treeRow {
+  opacity: 0.45;
+}
+
+.treeItemDragTarget > .treeRow {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+  background-color: color-mix(in srgb, var(--accent-interactive) 12%, transparent);
+}
+
+.treeItemDragInvalid > .treeRow {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+/* ─── Row ──────────────────────────────────────────────────────────────────── */
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline-end: 6px;
+  min-height: 30px;
+  border-radius: var(--radius);
+  transition: background-color var(--transition);
+}
+
+.treeRow:hover {
+  background-color: color-mix(in srgb, var(--color-navy) 6%, transparent);
+}
+
+/* ─── Expand toggle ─────────────────────────────────────────────────────────── */
+
+.expandToggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  padding: 0;
+  transition: background-color var(--transition);
+}
+
+.expandToggle:hover {
+  background-color: color-mix(in srgb, var(--color-navy) 10%, transparent);
+}
+
+/* ─── Expand caret ──────────────────────────────────────────────────────────── */
+
+.caret {
+  display: block;
+  transform: rotate(0deg);
+  transition: transform var(--transition);
+  opacity: 0.45;
+}
+
+.caretExpanded {
+  transform: rotate(90deg);
+}
+
+/* ─── Folder row button ─────────────────────────────────────────────────────── */
+
+.folderButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.folderIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--icon-default);
+}
+
+.folderName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Inline rename input ───────────────────────────────────────────────────── */
+
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent-interactive);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 1px 5px;
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-interactive) 30%, transparent);
+}
+
+/* ─── Row actions (rename / delete) ────────────────────────────────────────── */
+
+/* Use opacity (not display: none) so the row-action buttons stay in the
+   accessibility tree and tab order — keyboard users can reach Rename/Delete
+   even without hover, and Playwright/screen-reader can locate them. */
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.treeRow:hover .rowActions,
+.treeItem:focus-within .rowActions,
+.rowAction:focus-visible {
+  opacity: 1;
+}
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  opacity: 0.55;
+  cursor: pointer;
+  border-radius: var(--radius);
+  padding: 0;
+  transition: opacity var(--transition), background-color var(--transition);
+}
+
+.rowAction:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--color-navy) 10%, transparent);
+}
+
+/* ─── Nested children list ──────────────────────────────────────────────────── */
+
+.childList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Create folder inline row ──────────────────────────────────────────────── */
+
+.createRow {
+  list-style: none;
+  padding: 2px 8px;
+}
+
+.createInput {
+  width: 100%;
+  border: 1px solid var(--accent-interactive);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 4px 8px;
+  outline: none;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-interactive) 30%, transparent);
+}
+
+/* ─── New folder button ─────────────────────────────────────────────────────── */
+
+.addRootFolderBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.55;
+  border-radius: var(--radius);
+  transition: opacity var(--transition), background-color var(--transition);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.addRootFolderBtn:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--color-navy) 6%, transparent);
+}
+
+/* ─── Error message ─────────────────────────────────────────────────────────── */
+
+.errorMsg {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--color-error);
+  margin: 0;
+}
+
+/* ─── Aggregate badge (upload status per folder) ───────────────────────────── */
+
+.rootItemWrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.aggregateBadge,
+.aggregateBadgeButton {
+  display: inline-flex;
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+.aggregateBadgeButton {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.aggregateBadgeButton:hover {
+  filter: brightness(1.05);
+}
+
+.aggregateBadgeButton:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+  border-radius: 999px;
+}

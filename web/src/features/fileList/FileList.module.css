@@ -1,0 +1,385 @@
+.container {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.containerWithPanel {
+  /* panel occupies a fixed slice; the list gets the rest */
+}
+
+.listArea {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelArea {
+  flex-shrink: 0;
+  width: 280px;
+  border-inline-start: 1px solid var(--border-light);
+  overflow-y: auto;
+}
+
+/* ─── Skeleton / error ───────────────────────────────────────────────────────── */
+
+.skeletonArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.errorMsg {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--color-error);
+  margin: 0;
+}
+
+/* ─── Toolbar (search / type filter / bulk actions) ─────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 240px;
+  min-width: 140px;
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: 8px;
+  pointer-events: none;
+  color: var(--text-secondary);
+}
+
+.searchInput {
+  width: 100%;
+  height: 28px;
+  padding: 4px 8px 4px 26px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  transition: border-color var(--transition);
+}
+
+.searchInput:focus {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.filterWrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.filterSelect {
+  height: 28px;
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.filterSelect:focus {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.bulkActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.bulkCount {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ─── Table ─────────────────────────────────────────────────────────────────── */
+
+.tableWrapper {
+  overflow-x: auto;
+  flex: 1;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.headerRow {
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-surface);
+  z-index: 1;
+}
+
+.headerCell {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, var(--text-primary));
+  white-space: nowrap;
+  opacity: 0.65;
+}
+
+.headerName {
+  min-width: 200px;
+}
+
+/* Sortable column header — the header text + sort icon are wrapped in a
+   button for keyboard activation. Inherits cell styling, removes button chrome. */
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.sortButton:hover {
+  color: var(--text-primary);
+}
+
+.sortButton:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+.sortIcon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* The cell holding the row checkbox — narrow column, centred. */
+.cellCheckbox {
+  width: 32px;
+  padding: 0 8px;
+  text-align: center;
+}
+
+.checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent-interactive);
+}
+
+/* ─── Row ──────────────────────────────────────────────────────────────────── */
+
+.row {
+  border-bottom: 1px solid var(--border-light);
+  transition: background-color var(--transition);
+}
+
+.rowClickable {
+  cursor: pointer;
+}
+
+.rowClickable:hover {
+  background-color: color-mix(in srgb, var(--accent-interactive) 8%, transparent);
+}
+
+.rowSelected {
+  background-color: color-mix(in srgb, var(--accent-interactive) 15%, transparent);
+}
+
+/* Row that is part of the bulk selection (checkbox checked). Stacks with
+   .rowSelected if both apply — bulk selection wins on intensity. */
+.rowBulkSelected {
+  background-color: color-mix(in srgb, var(--accent-interactive) 12%, transparent);
+}
+
+/* Transient highlight applied when a row is revealed via revealDocument().
+   Animates from a saturated gold tint back to transparent so the row briefly
+   draws the eye without staying sticky. Duration matches HIGHLIGHT_DURATION_MS
+   in RootShell.tsx. */
+.rowHighlighted {
+  animation: revealHighlight 8s ease-out forwards;
+}
+
+@keyframes revealHighlight {
+  0% {
+    background-color: color-mix(in srgb, var(--color-gold) 50%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rowHighlighted {
+    animation: none;
+    background-color: color-mix(in srgb, var(--color-gold) 30%, transparent);
+  }
+}
+
+.cell {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+
+.cellMeta {
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.cellActions {
+  width: 40px;
+  text-align: center;
+}
+
+/* ─── File name cell ────────────────────────────────────────────────────────── */
+
+.fileNameCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fileIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--icon-default);
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Status badge ──────────────────────────────────────────────────────────── */
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.statusPending {
+  background-color: var(--color-navy-gray-2, #dedee5);
+  color: var(--color-navy);
+}
+
+.statusIndexing {
+  background-color: var(--color-pale-blue, #e2e8ff);
+  color: var(--color-blue);
+}
+
+/* Per web-branding.md: text on alert backgrounds must be navy for contrast.
+   Use a denser tint so the badge is still visibly "the alert color." */
+.statusReady {
+  background-color: color-mix(in srgb, var(--color-success) 45%, transparent);
+  color: var(--color-navy);
+}
+
+.statusFailed {
+  background-color: color-mix(in srgb, var(--color-error) 25%, transparent);
+  color: var(--color-navy);
+}
+
+/* ─── Spinner (Indexing status) ─────────────────────────────────────────────── */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 0.9s linear infinite;
+  display: block;
+}
+
+/* ─── Delete row button ─────────────────────────────────────────────────────── */
+
+.deleteRowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 16px;
+  opacity: 0;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: opacity var(--transition), background-color var(--transition);
+  padding: 0;
+}
+
+.row:hover .deleteRowBtn {
+  opacity: 0.55;
+}
+
+.deleteRowBtn:hover {
+  opacity: 1 !important;
+  background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+
+/* Screen-reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

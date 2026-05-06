@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+    ports:
+      - '8080:8080'
+    environment:
+      - NODE_ENV=development
+      - HOST=0.0.0.0

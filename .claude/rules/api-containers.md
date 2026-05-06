@@ -1,0 +1,4 @@
+- Multi-stage Dockerfiles — build stage + runtime stage
+- Base images from `mcr.microsoft.com` with pinned version tags — never `latest`
+- No secrets in the container image at any layer — `ARG`, `ENV`, `COPY`, or otherwise. Secrets live in Azure Key Vault and are loaded at runtime via `DefaultAzureCredential` (see `api-secrets.md`)
+- Same image promoted through dev, staging, production

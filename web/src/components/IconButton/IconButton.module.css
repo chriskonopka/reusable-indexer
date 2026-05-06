@@ -1,0 +1,37 @@
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--icon-default);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.iconButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent-interactive) 12%, transparent);
+  color: var(--accent-interactive);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}

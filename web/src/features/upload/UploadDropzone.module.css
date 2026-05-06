@@ -1,0 +1,66 @@
+.dropzone {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dropzoneActive {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: -8px;
+  border-radius: 2px;
+}
+
+.dropzoneDisabled {
+  /* visual cue handled by the children; no overlay. */
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.overlay {
+  position: absolute;
+  inset: 8px;
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--accent-interactive) 12%, transparent);
+  border: 2px dashed var(--accent-interactive);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 5;
+  color: var(--text-primary);
+}
+
+.overlayLabel {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 20px;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}

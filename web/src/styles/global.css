@@ -1,0 +1,49 @@
+/*
+ * Global resets only. Theme tokens (colours, typography) are applied by
+ * <ThemeProvider /> as CSS custom properties scoped to the indexer's
+ * subtree, so the indexer never bleeds tokens onto a host's :root.
+ *
+ * See web-styling.md and web-branding.md for the rules; the actual values
+ * live in src/theme/tokens.ts.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-interactive, currentColor);
+  outline-offset: 2px;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  border: none;
+  background: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

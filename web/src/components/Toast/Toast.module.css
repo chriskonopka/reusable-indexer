@@ -1,0 +1,60 @@
+.viewport {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+  max-width: min(420px, calc(100vw - 48px));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 2px;
+  border-left: 4px solid var(--text-secondary);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-navy) 25%, transparent);
+}
+
+.info {
+  border-left-color: var(--color-blue);
+}
+
+.success {
+  border-left-color: var(--color-success);
+}
+
+.error {
+  border-left-color: var(--color-error);
+}
+
+.message {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.close:hover {
+  color: var(--text-primary);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+}

@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "superpowers": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic-ai/claude-code-superpowers"
+      ]
+    },
+    "typescript-lsp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "typescript-language-server",
+        "--stdio"
+      ]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-git-commit.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-test-coverage.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

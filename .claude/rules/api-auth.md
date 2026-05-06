@@ -1,0 +1,4 @@
+- Entra ID issues tokens; `Microsoft.Identity.Web` validates them — no custom JWT parsing
+- `[Authorize]` on all controllers — only `GET /health` is anonymous
+- Services authenticate to Azure resources via Managed Identity — no passwords in connection strings, no API keys for first-party Azure services
+- **Secrets live in Azure Key Vault and are loaded at startup via `DefaultAzureCredential`** — this includes LLM provider API keys (see `api-llm-auth.md`) and any other third-party credentials that cannot use Managed Identity. Container app environment variables hold **non-secret configuration only** (endpoints, queue names, container names, allowed origins). Do not put API keys, connection strings with passwords, or other secrets in env vars — even in dev.

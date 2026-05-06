@@ -1,0 +1,4 @@
+- Validate at boundary crossings only (Frontend → API, Queue → Worker, External → API)
+- Internal calls within the same boundary trust their inputs
+- Use nullable reference types — do not suppress with `!`
+- `string.IsNullOrWhiteSpace()` not `== null`

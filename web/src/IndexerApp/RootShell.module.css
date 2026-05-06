@@ -1,0 +1,234 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100dvh;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Hamburger trigger — hidden above the mobile breakpoint via media query
+ * below. Always rendered so its aria-expanded state stays meaningful for
+ * assistive tech regardless of viewport. */
+.hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font: inherit;
+  margin-inline-end: 12px;
+  flex-shrink: 0;
+}
+
+.hamburger:hover {
+  background-color: color-mix(in srgb, var(--accent-interactive) 10%, transparent);
+}
+
+.hamburger:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+}
+
+.brandTitle {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.brandSubtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.themeToggle {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.themeToggle:hover {
+  background-color: color-mix(in srgb, var(--accent-interactive) 10%, transparent);
+}
+
+.themeToggle:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+}
+
+/* ─── Body (sidebar + main) ─────────────────────────────────────────────────── */
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+/* Sidebar slot — wraps <CollectionsSidebar /> and owns the responsive
+ * positioning. Above the mobile breakpoint it is a regular flex child;
+ * at mobile it becomes a fixed-position overlay that slides in. */
+.sidebarSlot {
+  display: flex;
+  flex-shrink: 0;
+}
+
+/* ─── Main content area ─────────────────────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ─── Folder + file layout (when a collection is active) ────────────────────── */
+
+.collectionArea {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collectionInner {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.popoverAnchor {
+  position: fixed;
+  inset-inline-end: 24px;
+  bottom: 96px;
+  z-index: 40;
+}
+
+.folderPane {
+  width: 220px;
+  flex-shrink: 0;
+  border-inline-end: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.contentPane {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── No-collection placeholder ─────────────────────────────────────────────── */
+
+.placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+/* ─── Mobile sidebar backdrop ───────────────────────────────────────────────── */
+
+.mobileBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--color-navy) 50%, transparent);
+  z-index: 40;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.mobileBackdrop:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: -2px;
+}
+
+/* ─── Tablet ────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 960px) {
+  .header {
+    padding: 10px 16px;
+  }
+}
+
+/* ─── Mobile ────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .hamburger {
+    display: inline-flex;
+  }
+
+  .brandSubtitle {
+    display: none;
+  }
+
+  /* Sidebar becomes a slide-in overlay anchored to the inline-start edge.
+   * Default off-screen; .sidebarSlotMobileOpen translates it back in. */
+  .sidebarSlot {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    height: 100dvh;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--color-navy) 25%, transparent);
+  }
+
+  .sidebarSlotMobileOpen {
+    transform: translateX(0);
+  }
+
+  /* Main pane stacks folder above content. */
+  .collectionInner {
+    flex-direction: column;
+  }
+
+  .folderPane {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+    border-inline-end: none;
+    border-block-end: 1px solid var(--border-light);
+  }
+}

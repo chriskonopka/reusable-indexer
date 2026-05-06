@@ -1,0 +1,95 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 140px;
+  height: 36px;
+  padding: 0 20px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent-interactive);
+  outline-offset: 2px;
+}
+
+.small {
+  height: 28px;
+  min-width: 96px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.primary {
+  background-color: var(--color-teal);
+  color: var(--color-navy);
+  border: 1px solid var(--color-teal);
+}
+
+.primary:hover:not(:disabled) {
+  background-color: var(--color-navy);
+  color: var(--color-white, #ffffff);
+  border-color: var(--color-navy);
+}
+
+[data-theme='dark'] .primary:hover:not(:disabled) {
+  background-color: var(--color-white, #ffffff);
+  color: var(--color-navy);
+  border-color: var(--color-white, #ffffff);
+}
+
+.secondary {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--color-navy);
+  color: var(--color-white, #ffffff);
+  border-color: var(--color-navy);
+}
+
+[data-theme='dark'] .secondary {
+  background-color: var(--color-teal);
+  color: var(--color-navy);
+  border-color: var(--color-teal);
+}
+
+[data-theme='dark'] .secondary:hover:not(:disabled) {
+  background-color: var(--color-white, #ffffff);
+  color: var(--color-navy);
+  border-color: var(--color-white, #ffffff);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

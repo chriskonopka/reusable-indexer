@@ -16,7 +16,7 @@ export type FileTypeClassification =
   | { kind: 'too-large'; reason: string }
   | { kind: 'empty'; reason: string };
 
-export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // spec 3.4.3
+export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // matches API SupportedContentTypes.MaxFileSizeBytes (100 MB)
 
 interface AllowlistEntry {
   contentType: string;
@@ -70,7 +70,7 @@ export const classify = (file: {
     return { kind: 'empty', reason: 'Empty file.' };
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    return { kind: 'too-large', reason: 'File too large — 50 MB max.' };
+    return { kind: 'too-large', reason: 'File too large — 100 MB max.' };
   }
 
   const ext = extensionOf(file.name);

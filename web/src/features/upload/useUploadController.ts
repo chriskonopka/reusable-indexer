@@ -323,11 +323,13 @@ export const useUploadController = (
   // ---------------------------------------------------------------------------
 
   const completeFiredRef = useRef<string | null>(null);
+  const completeInFlightRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!documentSetId || !state.batchId) return;
     if (state.files.length === 0) return;
     if (completeFiredRef.current === state.batchId) return;
+    if (completeInFlightRef.current === state.batchId) return;
     const stillUploading = state.files.some(
       (file) => file.status === 'Queued' || file.status === 'Uploading',
     );
@@ -340,12 +342,27 @@ export const useUploadController = (
     );
     if (!anySubmitted) return;
 
-    completeFiredRef.current = state.batchId;
+    // Capture the batchId we're targeting so it can't drift if state changes
+    // mid-flight. The latch (`completeFiredRef`) is set ONLY on success — a
+    // transient HTTP failure (network blip, 502 from AFD, etc.) leaves the
+    // latch open so the next state mutation re-fires this effect and retries.
+    // The in-flight ref prevents duplicate concurrent /complete calls.
+    const targetBatchId = state.batchId;
+    completeInFlightRef.current = targetBatchId;
     void (async () => {
       try {
-        await completeBatch(client, documentSetId, state.batchId!);
-      } catch {
-        // Idempotent on the server — the next visit can retry.
+        await completeBatch(client, documentSetId, targetBatchId);
+        completeFiredRef.current = targetBatchId;
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[indexer] /complete failed; will retry on next state change',
+          { documentSetId, batchId: targetBatchId, error },
+        );
+      } finally {
+        if (completeInFlightRef.current === targetBatchId) {
+          completeInFlightRef.current = null;
+        }
       }
     })();
   }, [client, documentSetId, state.batchId, state.files]);

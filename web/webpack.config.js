@@ -23,10 +23,13 @@ module.exports = (_env, argv) => {
       // Content-hash filenames in production for long-term caching.
       filename: isProd ? '[name].[contenthash].js' : '[name].js',
       chunkFilename: isProd ? '[name].[contenthash].js' : '[name].js',
-      // Allow the public path to be overridden via an environment variable.
-      // Used in CI to set the correct base path for GitHub Pages deployments
-      // (e.g. PUBLIC_PATH=/web-app/). Defaults to / for local dev.
-      publicPath: process.env.PUBLIC_PATH || '/',
+      // 'auto' lets the federation runtime resolve chunk URLs relative to where
+      // remoteEntry.js was loaded from. Required for federation: when a consumer
+      // at a different origin (e.g. localhost:8080) loads remoteEntry.js from
+      // this SWA, chunks must load from the SWA — not from the consumer's origin.
+      // PUBLIC_PATH env var (if set) overrides — used for CI deployments to
+      // pin a specific absolute URL.
+      publicPath: process.env.PUBLIC_PATH || 'auto',
       clean: true,
     },
 
@@ -149,10 +152,14 @@ module.exports = (_env, argv) => {
 
       // Expose environment variables to the browser bundle.
       // Only whitelisted variables are forwarded — never forward the entire process.env.
+      // MSAL_CLIENT_ID and friends are read by src/host/realHost.ts in `?real=1` mode.
       new webpack.DefinePlugin({
         'process.env.APPLICATIONINSIGHTS_CONNECTION_STRING': JSON.stringify(
           process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || '',
         ),
+        'process.env.MSAL_CLIENT_ID': JSON.stringify(process.env.MSAL_CLIENT_ID || ''),
+        'process.env.MSAL_TENANT_ID': JSON.stringify(process.env.MSAL_TENANT_ID || ''),
+        'process.env.API_BASE_URL': JSON.stringify(process.env.API_BASE_URL || ''),
       }),
 
       // Runs TypeScript type-checking in a separate worker so it does not
@@ -193,7 +200,7 @@ module.exports = (_env, argv) => {
       : {},
 
     devServer: {
-      port: 8080,
+      port: 5174,
       hot: true,
       // Required for client-side routing (SPA fallback).
       historyApiFallback: true,

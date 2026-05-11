@@ -8,6 +8,7 @@ import { HostProvider } from '../../host/HostContext';
 import { ThemeProvider } from '../../theme/ThemeProvider';
 import { ToastProvider } from '../../hooks/useToast';
 import { ToastViewport } from '../../components/Toast';
+import { SelectionProvider } from '../selection';
 import { FileList } from './FileList';
 import type { FileListProps } from './FileList';
 
@@ -89,8 +90,10 @@ const Harness = ({ events, children }: HarnessProps) => {
       <ThemeProvider initialTheme="light">
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
-            {children}
-            <ToastViewport />
+            <SelectionProvider>
+              {children}
+              <ToastViewport />
+            </SelectionProvider>
           </ToastProvider>
         </QueryClientProvider>
       </ThemeProvider>
@@ -492,14 +495,15 @@ describe('FileList', () => {
       name: /Select all visible|Deselect all visible/,
     });
     await user.click(headerCheckbox);
-    // After selecting all, the bulk action should appear with "3 selected".
-    expect(await screen.findByText('3 selected')).toBeInTheDocument();
+    // After selecting all, the bulk action should appear with the
+    // selection-summary chip (slice B5 — "N documents selected").
+    expect(await screen.findByText('3 documents selected')).toBeInTheDocument();
     // Per-row checkboxes are now checked.
     expect(screen.getByRole('checkbox', { name: 'Select alpha.pdf' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Select beta.pdf' })).toBeChecked();
 
     await user.click(headerCheckbox);
-    expect(screen.queryByText('3 selected')).not.toBeInTheDocument();
+    expect(screen.queryByText(/documents selected/)).not.toBeInTheDocument();
   });
 
   it('per-row checkbox toggles selection without opening the panel', async () => {
@@ -507,7 +511,7 @@ describe('FileList', () => {
     const { onDocumentSelect } = renderList({}, docs3());
     await screen.findByText('alpha.pdf');
     await user.click(screen.getByRole('checkbox', { name: 'Select alpha.pdf' }));
-    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+    expect(await screen.findByText('1 document selected')).toBeInTheDocument();
     expect(onDocumentSelect).not.toHaveBeenCalled();
   });
 
@@ -550,7 +554,7 @@ describe('FileList', () => {
     const { container } = renderList({}, docs3());
     await screen.findByText('alpha.pdf');
     await user.click(screen.getByRole('checkbox', { name: 'Select alpha.pdf' }));
-    await screen.findByText('1 selected');
+    await screen.findByText('1 document selected');
     expect(await axe(container)).toHaveNoViolations();
   });
 

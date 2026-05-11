@@ -6,7 +6,9 @@ import { HostProvider } from '../host/HostContext';
 import { ThemeProvider } from '../theme/ThemeProvider';
 import { ToastProvider } from '../hooks/useToast';
 import { ActiveDocumentSetProvider } from '../features/collections/state';
+import { SelectionProvider } from '../features/selection';
 import { UploadProvider } from '../features/upload';
+import { SelectionEventBridge } from './SelectionEventBridge';
 
 // Composition root for the indexer's React tree. Order matters:
 //   HostProvider — must wrap everything (api/theme/active-collection read host).
@@ -60,7 +62,10 @@ export const Providers = ({ host, children }: ProvidersProps) => {
           <ToastProvider>
             <ActiveDocumentSetProvider>
               <UploadProvider>
-                <ErrorBoundary onError={handleError}>{children}</ErrorBoundary>
+                <SelectionProvider>
+                  <SelectionEventBridge />
+                  <ErrorBoundary onError={handleError}>{children}</ErrorBoundary>
+                </SelectionProvider>
               </UploadProvider>
             </ActiveDocumentSetProvider>
           </ToastProvider>

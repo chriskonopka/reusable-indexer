@@ -22,6 +22,11 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useEmitEvent } from '../../host/useHost';
 import { relativeTimeLabel } from '../../utils/dateLabels';
 import { formatBytes } from '../../utils/fileSize';
+import {
+  DND_MIME_DOCUMENT_ID,
+  DND_MIME_DOCUMENT_SOURCE_FOLDER,
+} from '../../utils/dndMime';
+import { SELECTION_CAP_PER_KIND, useSelection } from '../selection';
 import { useBrowseContents, useDeleteDocument } from './queries';
 import { DocumentPropertiesPanel } from './DocumentPropertiesPanel';
 import styles from './FileList.module.css';
@@ -198,10 +203,34 @@ const DeleteDocumentsModal = ({
   );
 };
 
+// Aria-live-friendly summary of the current selection. Pluralized so screen
+// readers don't say "1 documents selected".
+const selectionSummary = ({
+  documents,
+  folders,
+}: {
+  documents: number;
+  folders: number;
+}): string => {
+  if (documents === 0 && folders === 0) return '';
+  const parts: string[] = [];
+  if (documents > 0) {
+    parts.push(`${documents} document${documents === 1 ? '' : 's'}`);
+  }
+  if (folders > 0) {
+    parts.push(`${folders} folder${folders === 1 ? '' : 's'}`);
+  }
+  return `${parts.join(', ')} selected`;
+};
+
 // ─── Document row ─────────────────────────────────────────────────────────────
 
 interface DocumentRowProps {
   doc: DocumentMetadataResponse;
+  /** The folder the row is currently rendered in. Encoded into the drag
+   *  payload so the document-move mutation can invalidate the source folder's
+   *  contents query in addition to the destination. */
+  currentFolderId: string | null;
   isSelected: boolean;
   isInBulkSelection: boolean;
   isHighlighted: boolean;
@@ -213,6 +242,7 @@ interface DocumentRowProps {
 
 const DocumentRowBase = ({
   doc,
+  currentFolderId,
   isSelected,
   isInBulkSelection,
   isHighlighted,
@@ -222,6 +252,23 @@ const DocumentRowBase = ({
   onDeleteRequest,
 }: DocumentRowProps) => {
   const isReady = doc.status === 'Ready';
+  // Only Ready documents are draggable. In-flight rows can't be moved without
+  // racing the worker. Read-only callers can't move either.
+  const isDraggable = !isReadOnly && isReady;
+  const handleDragStart = useCallback(
+    (event: React.DragEvent<HTMLTableRowElement>) => {
+      event.dataTransfer.setData(DND_MIME_DOCUMENT_ID, doc.documentId);
+      // Encode the source folder so the drop handler can invalidate its
+      // contents query. `__root__` distinguishes the document-set root from
+      // an empty string ("not set").
+      event.dataTransfer.setData(
+        DND_MIME_DOCUMENT_SOURCE_FOLDER,
+        currentFolderId ?? '__root__',
+      );
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    [doc.documentId, currentFolderId],
+  );
   return (
     <tr
       data-document-id={doc.documentId}
@@ -235,6 +282,8 @@ const DocumentRowBase = ({
         .filter(Boolean)
         .join(' ')}
       aria-selected={isSelected}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? handleDragStart : undefined}
       onClick={isReady ? () => onSelect(doc.documentId) : undefined}
     >
       {!isReadOnly && (
@@ -313,24 +362,27 @@ export const FileList = ({
   const deleteMutation = useDeleteDocument();
   const { push: pushToast } = useToast();
   const emitEvent = useEmitEvent();
+  const selection = useSelection();
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  // Sort / filter / search / bulk-select state. All client-side; the wire
-  // contract returns documents flat per folder.
+  // Sort / filter / search state. All client-side; the wire contract returns
+  // documents flat per folder. The set of selected document IDs lives in the
+  // shared SelectionContext so it survives folder navigation and feeds the
+  // `selection/changed` host event the consumer uses to scope chat retrieval.
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [typeFilter, setTypeFilter] = useState<FileTypeCode | typeof TYPE_FILTER_ALL>(
     TYPE_FILTER_ALL,
   );
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
-  const [bulkSelection, setBulkSelection] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<DocumentMetadataResponse[] | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  // Reset selection when the folder changes — different folder, fresh slate.
-  useEffect(() => {
-    setBulkSelection(new Set());
-  }, [folderId]);
+  // Set view over the shared selection list for O(1) lookups in the row map.
+  const selectedDocumentIds = useMemo(
+    () => new Set(selection.state.documents.map((doc) => doc.documentId)),
+    [selection.state.documents],
+  );
 
   // When a document is revealed via RootShell.revealDocument(), scroll its row
   // into view once the documents query has resolved and the row is in the DOM.
@@ -383,24 +435,35 @@ export const FileList = ({
     );
   }, []);
 
-  const handleToggleBulkSelect = useCallback((documentId: string) => {
-    setBulkSelection((prev) => {
-      const next = new Set(prev);
-      if (next.has(documentId)) next.delete(documentId);
-      else next.add(documentId);
-      return next;
-    });
-  }, []);
+  const handleToggleBulkSelect = useCallback(
+    (documentId: string) => {
+      const doc = data?.documents.find((row) => row.documentId === documentId);
+      if (!doc) return;
+      const outcome = selection.toggleDocument({
+        documentId: doc.documentId,
+        fileName: doc.fileName,
+      });
+      if (outcome === 'cap-reached') {
+        pushToast(
+          `Selection limit reached — at most ${SELECTION_CAP_PER_KIND} documents can be selected at once.`,
+          'info',
+        );
+      }
+    },
+    [data, selection, pushToast],
+  );
 
   // Header checkbox: select all visible rows. Clicking again with all selected
-  // clears the selection. Indeterminate when partially selected.
+  // clears the selection of visible rows (selection of rows outside the
+  // current filter is preserved). Indeterminate when partially selected.
+  const visibleDocs = useMemo(() => displayedDocs, [displayedDocs]);
   const visibleIds = useMemo(
-    () => displayedDocs.map((doc) => doc.documentId),
-    [displayedDocs],
+    () => visibleDocs.map((doc) => doc.documentId),
+    [visibleDocs],
   );
   const visibleSelectedCount = useMemo(
-    () => visibleIds.filter((id) => bulkSelection.has(id)).length,
-    [visibleIds, bulkSelection],
+    () => visibleIds.filter((id) => selectedDocumentIds.has(id)).length,
+    [visibleIds, selectedDocumentIds],
   );
   const allVisibleSelected =
     visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
@@ -414,19 +477,20 @@ export const FileList = ({
   }, [someVisibleSelected]);
 
   const handleHeaderCheckbox = useCallback(() => {
-    setBulkSelection((prev) => {
-      if (allVisibleSelected) {
-        // Clear selection of currently-visible rows; preserve any selection
-        // outside the current filter.
-        const next = new Set(prev);
-        visibleIds.forEach((id) => next.delete(id));
-        return next;
-      }
-      const next = new Set(prev);
-      visibleIds.forEach((id) => next.add(id));
-      return next;
-    });
-  }, [allVisibleSelected, visibleIds]);
+    const next = allVisibleSelected
+      ? []
+      : visibleDocs.map((doc) => ({
+          documentId: doc.documentId,
+          fileName: doc.fileName,
+        }));
+    const report = selection.setVisibleDocuments(visibleIds, next);
+    if (report.capReached) {
+      pushToast(
+        `Selection limit reached — at most ${SELECTION_CAP_PER_KIND} documents can be selected at once.`,
+        'info',
+      );
+    }
+  }, [allVisibleSelected, visibleDocs, visibleIds, selection, pushToast]);
 
   const handleSingleDeleteRequest = useCallback((doc: DocumentMetadataResponse) => {
     setPendingDelete([doc]);
@@ -434,7 +498,9 @@ export const FileList = ({
 
   const handleBulkDeleteRequest = () => {
     if (!data) return;
-    const docs = data.documents.filter((doc) => bulkSelection.has(doc.documentId));
+    const docs = data.documents.filter((doc) =>
+      selectedDocumentIds.has(doc.documentId),
+    );
     if (docs.length === 0) return;
     setPendingDelete(docs);
   };
@@ -451,12 +517,10 @@ export const FileList = ({
         {
           onSuccess: () => {
             if (selectedDocumentId === documentId) onDocumentSelect(null);
-            setBulkSelection((prev) => {
-              if (!prev.has(documentId)) return prev;
-              const next = new Set(prev);
-              next.delete(documentId);
-              return next;
-            });
+            // Drop the deleted doc from the shared selection.
+            if (selectedDocumentIds.has(documentId)) {
+              selection.toggleDocument({ documentId, fileName });
+            }
           },
           onError: (error) =>
             pushToast((error as Error).message ?? `Could not delete ${fileName}.`, 'error'),
@@ -470,6 +534,7 @@ export const FileList = ({
     setIsBulkDeleting(true);
     let successCount = 0;
     const failures: string[] = [];
+    const deletedIds: string[] = [];
     for (const doc of docs) {
       try {
         await deleteMutation.mutateAsync({
@@ -479,16 +544,18 @@ export const FileList = ({
         });
         if (selectedDocumentId === doc.documentId) onDocumentSelect(null);
         successCount++;
+        deletedIds.push(doc.documentId);
       } catch {
         failures.push(doc.fileName);
       }
     }
     setIsBulkDeleting(false);
-    setBulkSelection((prev) => {
-      const next = new Set(prev);
-      docs.forEach((doc) => next.delete(doc.documentId));
-      return next;
-    });
+    // Remove successfully-deleted rows from the shared selection. Use
+    // setVisibleDocuments with the deleted IDs as the "visible" universe so
+    // it strips exactly those and preserves the rest of the selection.
+    if (deletedIds.length > 0) {
+      selection.setVisibleDocuments(deletedIds, []);
+    }
     if (failures.length === 0) {
       pushToast(`Deleted ${successCount} document${successCount === 1 ? '' : 's'}.`, 'success');
     } else if (successCount === 0) {
@@ -566,21 +633,35 @@ export const FileList = ({
             </select>
           </label>
 
-          {!isReadOnly && bulkSelection.size > 0 && (
-            <div className={styles.bulkActions} role="status" aria-live="polite">
-              <span className={styles.bulkCount}>
-                {bulkSelection.size} selected
-              </span>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={handleBulkDeleteRequest}
-                aria-label={`Delete ${bulkSelection.size} selected documents`}
-              >
-                <Trash size={14} aria-hidden /> Delete
-              </Button>
-            </div>
-          )}
+          {!isReadOnly &&
+            (selectedDocumentIds.size > 0 || selection.state.folders.length > 0) && (
+              <div className={styles.bulkActions} role="status" aria-live="polite" aria-atomic="true">
+                <span className={styles.bulkCount}>
+                  {selectionSummary({
+                    documents: selectedDocumentIds.size,
+                    folders: selection.state.folders.length,
+                  })}
+                </span>
+                {selectedDocumentIds.size > 0 && (
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={handleBulkDeleteRequest}
+                    aria-label={`Delete ${selectedDocumentIds.size} selected documents`}
+                  >
+                    <Trash size={14} aria-hidden /> Delete
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={selection.clear}
+                  aria-label="Clear selection"
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
         </div>
 
         {displayedDocs.length === 0 ? (
@@ -659,8 +740,9 @@ export const FileList = ({
                   <DocumentRow
                     key={doc.documentId}
                     doc={doc}
+                    currentFolderId={folderId}
                     isSelected={doc.documentId === selectedDocumentId}
-                    isInBulkSelection={bulkSelection.has(doc.documentId)}
+                    isInBulkSelection={selectedDocumentIds.has(doc.documentId)}
                     isHighlighted={doc.documentId === highlightedDocumentId}
                     isReadOnly={isReadOnly}
                     onSelect={handleSelect}

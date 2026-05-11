@@ -10,6 +10,7 @@ import { ThemeProvider } from '../../theme/ThemeProvider';
 import { ToastProvider } from '../../hooks/useToast';
 import { ToastViewport } from '../../components/Toast';
 import { __resetIndexerDbForTests } from '../../utils/idb';
+import { SelectionProvider } from '../selection';
 import { FolderTree } from './FolderTree';
 import type { FolderTreeHandle, FolderTreeProps } from './FolderTree';
 
@@ -90,6 +91,22 @@ const buildFolderFetch =
         }),
       );
     }
+    if (url.match(/\/documents\/[^/]+\/move$/) && method === 'POST') {
+      return Promise.resolve(
+        buildOkResponse({
+          documentId: 'd-1',
+          documentSetId: 'ds-1',
+          folderId: 'f-alpha',
+          fileName: 'foo.pdf',
+          status: 'Ready',
+          fileType: 'Other',
+          contentType: 'application/pdf',
+          fileSizeBytes: 1234,
+          createdAt: '2026-05-05T00:00:00Z',
+          updatedAt: '2026-05-05T00:00:00Z',
+        }),
+      );
+    }
 
     return Promise.resolve(new Response(null, { status: 404 }));
   };
@@ -121,8 +138,10 @@ const Harness = ({ children }: HarnessProps) => {
       <ThemeProvider initialTheme="light">
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
-            {children}
-            <ToastViewport />
+            <SelectionProvider>
+              {children}
+              <ToastViewport />
+            </SelectionProvider>
           </ToastProvider>
         </QueryClientProvider>
       </ThemeProvider>
@@ -725,6 +744,81 @@ describe('FolderTree', () => {
     });
     const moveCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) =>
       String(url).includes('/move'),
+    );
+    expect(moveCalls).toHaveLength(0);
+  });
+
+  // ── Document drop (slice A: document move) ──────────────────────────────────
+
+  // Synthetic DataTransfer with the two MIME types the FileList sets when a
+  // document row is dragged. jsdom's DragEvent has dataTransfer=null otherwise.
+  const buildDocumentDataTransfer = (
+    documentId: string,
+    sourceFolderId: string | null,
+  ) => {
+    const store: Record<string, string> = {
+      'application/x-mws-document-id': documentId,
+      'application/x-mws-document-source-folder': sourceFolderId ?? '__root__',
+    };
+    return {
+      types: Object.keys(store),
+      getData: (mime: string) => store[mime] ?? '',
+      setData: () => {},
+      effectAllowed: 'move',
+    } as unknown as DataTransfer;
+  };
+
+  it('routes a document drop to POST /documents/{id}/move with newFolderId', async () => {
+    renderTree();
+    const betaRowDiv = (await screen.findByText('Beta')).closest('[draggable]')!;
+    const dataTransfer = buildDocumentDataTransfer('d-1', 'f-source');
+
+    fireEvent.dragOver(betaRowDiv, { dataTransfer });
+    fireEvent.drop(betaRowDiv, { dataTransfer });
+
+    await waitFor(() => {
+      const moveCall = (global.fetch as jest.Mock).mock.calls.find(([url]) =>
+        String(url).match(/\/documents\/d-1\/move$/),
+      );
+      expect(moveCall).toBeDefined();
+      const body = JSON.parse((moveCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ newFolderId: 'f-beta' });
+    });
+  });
+
+  it('routes a document drop on All files to newFolderId=null', async () => {
+    renderTree();
+    await screen.findByText('Alpha');
+    const allFilesBtn = screen.getByRole('button', { name: 'All files' });
+    const dataTransfer = buildDocumentDataTransfer('d-1', 'f-source');
+
+    fireEvent.dragOver(allFilesBtn, { dataTransfer });
+    fireEvent.drop(allFilesBtn, { dataTransfer });
+
+    await waitFor(() => {
+      const moveCall = (global.fetch as jest.Mock).mock.calls.find(([url]) =>
+        String(url).match(/\/documents\/d-1\/move$/),
+      );
+      expect(moveCall).toBeDefined();
+      const body = JSON.parse((moveCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ newFolderId: null });
+    });
+  });
+
+  it('skips the API call when the document is dropped on its own current folder', async () => {
+    renderTree();
+    const betaRowDiv = (await screen.findByText('Beta')).closest('[draggable]')!;
+    // Source folder == target folder == f-beta — no-op.
+    const dataTransfer = buildDocumentDataTransfer('d-1', 'f-beta');
+
+    fireEvent.dragOver(betaRowDiv, { dataTransfer });
+    fireEvent.drop(betaRowDiv, { dataTransfer });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const moveCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) =>
+      String(url).match(/\/documents\/[^/]+\/move$/),
     );
     expect(moveCalls).toHaveLength(0);
   });

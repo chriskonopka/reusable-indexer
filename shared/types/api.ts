@@ -211,6 +211,23 @@ export interface UpdateDocumentRequest {
   fileType: FileTypeCode;
 }
 
+/**
+ * Move a document into a different folder of the same document set.
+ * `null` = move to the document-set root.
+ *
+ * Wire shape mirrors MoveFolderRequest: the API uses `newFolderId` here, not
+ * `folderId`. The server updates AI Search chunk metadata as a best-effort
+ * side effect so folder-scoped retrieval stays consistent across moves.
+ *
+ * Errors:
+ * - 403 — caller does not own the document set
+ * - 404 — document missing/soft-deleted OR target folder not in this set
+ * - 409 — a document with the same filename already exists in the target folder
+ */
+export interface MoveDocumentRequest {
+  newFolderId: string | null;
+}
+
 // =============================================================================
 // Batches
 // =============================================================================

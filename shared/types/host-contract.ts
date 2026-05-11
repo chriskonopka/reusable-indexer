@@ -80,12 +80,45 @@ export type IndexerEvent =
    * app typically responds by opening its viewer at this document.
    * Includes folder context so the consuming app can render a breadcrumb
    * or back-link without refetching.
+   *
+   * Distinct from `selection/changed` — this is a click-to-open-viewer
+   * signal that fires on every row click regardless of the multi-select
+   * state. Consumers should not use this to derive chat scope; subscribe
+   * to `selection/changed` for that.
    */
   | {
       type: 'document/selected';
       documentSetId: string;
       documentId: string;
       folderId: string | null;
+    }
+
+  /**
+   * The user's chat-scope selection changed. Emitted whenever the indexer's
+   * multi-select state transitions to a new set — adds, removes, clears,
+   * select-all, or a collection switch (which clears).
+   *
+   * The two arrays OR with each other on the API side: a folder in
+   * `folders` matches every document tagged with that folder at index time;
+   * documents in `documents` add to that set. The API ANDs the union with
+   * the active DocumentSet.
+   *
+   * Hard cap: each array carries at most 64 items, mirroring the API's
+   * ValidationFailed boundary on `SendMessageRequest`. The indexer enforces
+   * the cap at selection time — the consumer can trust the arrays it
+   * receives.
+   *
+   * Display labels (`fileName`, `folderName`, `path`) are included so the
+   * consumer's scope-indicator UI can render chips without an extra metadata
+   * round-trip. `path` for folders is the slash-joined ancestor names ending
+   * in the folder itself (e.g. `"Contracts/2026"`), useful for disambiguating
+   * folders with the same `folderName` at different levels.
+   */
+  | {
+      type: 'selection/changed';
+      documentSetId: string;
+      documents: { documentId: string; fileName: string }[];
+      folders: { folderId: string; folderName: string; path: string }[];
     }
 
   /**

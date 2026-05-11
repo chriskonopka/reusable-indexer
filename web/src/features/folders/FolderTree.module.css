@@ -88,6 +88,17 @@
   background-color: color-mix(in srgb, var(--color-navy) 6%, transparent);
 }
 
+/* ─── Selection checkbox ────────────────────────────────────────────────────── */
+
+.selectCheckbox {
+  flex-shrink: 0;
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent-interactive);
+}
+
 /* ─── Expand toggle ─────────────────────────────────────────────────────────── */
 
 .expandToggle {

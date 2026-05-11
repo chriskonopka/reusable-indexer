@@ -2,6 +2,7 @@ import type {
   DocumentDeleteAcceptedResponse,
   DocumentMetadataResponse,
   DocumentStatusResponse,
+  MoveDocumentRequest,
   UpdateDocumentRequest,
 } from '@shared/types';
 import type { ApiClient } from '../client';
@@ -30,6 +31,16 @@ export const updateDocument = (
   body: UpdateDocumentRequest,
 ): Promise<DocumentMetadataResponse> =>
   client.patch(`/documents/${encodeURIComponent(documentId)}`, body);
+
+export const moveDocument = (
+  client: ApiClient,
+  documentId: string,
+  body: MoveDocumentRequest,
+): Promise<DocumentMetadataResponse> =>
+  client.post(
+    `/documents/${encodeURIComponent(documentId)}/move`,
+    body,
+  );
 
 export const deleteDocument = (
   client: ApiClient,

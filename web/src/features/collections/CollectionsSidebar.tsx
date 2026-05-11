@@ -20,11 +20,9 @@ import styles from './CollectionsSidebar.module.css';
 interface CollectionsSidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  /** Set when the user is in the middle of an upload session (S3 wires this). */
-  uploadInProgress?: boolean;
   /**
    * Fires after every row click that resolves to a collection selection
-   * (skipping no-ops like the upload-in-progress guard or in-place rename).
+   * (skipping no-ops like in-place rename).
    * RootShell uses this to auto-dismiss the mobile sidebar overlay even
    * when the clicked row is already the active one.
    */
@@ -49,7 +47,6 @@ const nextDefaultName = (existing: ReadonlyArray<DocumentSetSummary>): string =>
 export const CollectionsSidebar = ({
   collapsed,
   onToggleCollapse,
-  uploadInProgress = false,
   onAfterCollectionSelect,
 }: CollectionsSidebarProps) => {
   const { data, isLoading, isError } = useDocumentSetsList();
@@ -86,21 +83,16 @@ export const CollectionsSidebar = ({
   const onClickRow = useCallback(
     (row: DocumentSetSummary) => {
       if (renameTarget?.id === row.documentSetId) return;
-      // Switching is blocked only when there is already an active collection
-      // and an upload is in flight against it (spec 3.2.5). Selecting the
-      // currently-active row is always a no-op.
-      if (
-        uploadInProgress &&
-        activeId !== null &&
-        row.documentSetId !== activeId
-      ) {
-        toast.push('Upload in progress — finish before switching.', 'info');
-        return;
-      }
+      // Cross-collection navigation during upload is allowed. The upload
+      // controller pins its poll / /complete / cache invalidation to the
+      // upload's source collection (state.targetDocumentSetId), so switching
+      // away does not break the in-flight batch. Starting a new upload in
+      // another collection is still blocked, but that guard lives in
+      // useUploadController.acceptDrop — not here.
       select(row.documentSetId);
       onAfterCollectionSelect?.();
     },
-    [activeId, renameTarget, select, toast, uploadInProgress, onAfterCollectionSelect],
+    [renameTarget, select, onAfterCollectionSelect],
   );
 
   const onSubmitRename = useCallback(

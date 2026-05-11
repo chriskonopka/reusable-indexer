@@ -10,8 +10,9 @@ import type {
 import { HostProvider } from '../../host/HostContext';
 import { ThemeProvider } from '../../theme/ThemeProvider';
 import { ToastProvider } from '../../hooks/useToast';
-import { UploadProvider, useUploadState } from './state';
-import { useUploadController } from './useUploadController';
+import type { UploadFile } from '@shared/types';
+import { UploadProvider, useUploadDispatch, useUploadState } from './state';
+import { __TESTING__, useUploadController } from './useUploadController';
 
 // Integration tests for the upload controller. We stub `fetch` and drive
 // the controller through its public API (acceptDrop, retry, dismiss) and
@@ -556,5 +557,210 @@ describe('useUploadController', () => {
       expect(captured.state!.files).toHaveLength(1);
       expect(captured.state!.files[0]?.relativePath).toBe('real.pdf');
     });
+  });
+});
+
+describe('useUploadController — cross-collection guard (slice #3)', () => {
+  interface XCaptured {
+    controller?: ReturnType<typeof useUploadController>;
+    dispatch?: ReturnType<typeof useUploadDispatch>;
+    state?: ReturnType<typeof useUploadState>;
+  }
+
+  const XProbe = ({
+    documentSetId,
+    onMount,
+    onState,
+  }: {
+    documentSetId: string | null;
+    onMount: (
+      controller: ReturnType<typeof useUploadController>,
+      dispatch: ReturnType<typeof useUploadDispatch>,
+    ) => void;
+    onState: (state: ReturnType<typeof useUploadState>) => void;
+  }) => {
+    const controller = useUploadController(documentSetId);
+    const dispatch = useUploadDispatch();
+    const state = useUploadState();
+    onMount(controller, dispatch);
+    onState(state);
+    return null;
+  };
+
+  const fakeFile = (name: string): File =>
+    ({ name, type: 'application/pdf', size: 4 } as unknown as File);
+
+  it('refuses to start a new session in a different collection while one is in flight', async () => {
+    const mock = installFetch({ acceptedIds: [] });
+    const captured: XCaptured = {};
+
+    // Start the probe on collection "ds-other" — but seed an in-flight
+    // session targeting "ds-A" via dispatch so the cross-collection guard
+    // has something to compare against.
+    render(
+      wrap(
+        <XProbe
+          documentSetId="ds-other"
+          onMount={(controller, dispatch) => {
+            captured.controller = controller;
+            captured.dispatch = dispatch;
+          }}
+          onState={(state) => {
+            captured.state = state;
+          }}
+        />,
+      ),
+    );
+
+    act(() => {
+      captured.dispatch!({
+        type: 'START_SESSION',
+        targetDocumentSetId: 'ds-A',
+        files: [
+          {
+            clientId: 'a-1',
+            file: fakeFile('a.pdf'),
+            relativePath: 'a.pdf',
+            targetFolderId: null,
+            status: 'Uploading',
+            documentId: null,
+            failureReason: null,
+            severity: null,
+            retryable: false,
+          },
+        ],
+      });
+      captured.dispatch!({ type: 'SET_AGGREGATE', status: 'InProgress' });
+    });
+
+    const callsBefore = mock.mock.calls.length;
+
+    await act(async () => {
+      await captured.controller!.acceptDrop(
+        { fileList: buildFileList([new File(['x'], 'b.pdf', { type: 'application/pdf' })]) },
+        { rootFolderId: null },
+      );
+    });
+
+    // No new network calls — acceptDrop refused before touching the API.
+    expect(mock.mock.calls.length).toBe(callsBefore);
+    // The in-flight session for ds-A is untouched.
+    expect(captured.state!.targetDocumentSetId).toBe('ds-A');
+    expect(captured.state!.files).toHaveLength(1);
+    expect(captured.state!.files[0]?.relativePath).toBe('a.pdf');
+  });
+});
+
+describe('useUploadController — indexed-fade gating', () => {
+  interface FadeCaptured {
+    dispatch?: ReturnType<typeof useUploadDispatch>;
+    state?: ReturnType<typeof useUploadState>;
+  }
+
+  const FadeProbe = ({
+    onMount,
+    onState,
+  }: {
+    onMount: (dispatch: ReturnType<typeof useUploadDispatch>) => void;
+    onState: (state: ReturnType<typeof useUploadState>) => void;
+  }) => {
+    // Mount the controller for its fade-arming effect; the test drives the
+    // session state directly via dispatch instead of acceptDrop so we can
+    // place a file in Indexed with a specific aggregateStatus without
+    // staging fetch responses.
+    useUploadController('ds');
+    const dispatch = useUploadDispatch();
+    const state = useUploadState();
+    onMount(dispatch);
+    onState(state);
+    return null;
+  };
+
+  const fakeFile = (name: string): File =>
+    ({ name, type: 'application/pdf', size: 1 } as unknown as File);
+
+  const buildIndexedFile = (clientId: string): UploadFile => ({
+    clientId,
+    file: fakeFile(`${clientId}.pdf`),
+    relativePath: `${clientId}.pdf`,
+    targetFolderId: null,
+    status: 'Indexed',
+    documentId: `doc-${clientId}`,
+    failureReason: null,
+    severity: null,
+    retryable: false,
+  });
+
+  let captured: FadeCaptured = {};
+
+  beforeEach(() => {
+    captured = {};
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('does not dismiss Indexed rows while the batch is still InProgress', () => {
+    render(
+      wrap(
+        <FadeProbe
+          onMount={(dispatch) => {
+            captured.dispatch = dispatch;
+          }}
+          onState={(state) => {
+            captured.state = state;
+          }}
+        />,
+      ),
+    );
+
+    act(() => {
+      captured.dispatch!({
+        type: 'START_SESSION',
+        targetDocumentSetId: 'ds',
+        files: [buildIndexedFile('a')],
+      });
+      captured.dispatch!({ type: 'SET_AGGREGATE', status: 'InProgress' });
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(__TESTING__.INDEXED_FADE_MS + 1000);
+    });
+
+    expect(captured.state!.aggregateStatus).toBe('InProgress');
+    expect(captured.state!.files).toHaveLength(1);
+    expect(captured.state!.files[0]?.status).toBe('Indexed');
+  });
+
+  it('dismisses Indexed rows after fade once the batch is Completed', () => {
+    render(
+      wrap(
+        <FadeProbe
+          onMount={(dispatch) => {
+            captured.dispatch = dispatch;
+          }}
+          onState={(state) => {
+            captured.state = state;
+          }}
+        />,
+      ),
+    );
+
+    act(() => {
+      captured.dispatch!({
+        type: 'START_SESSION',
+        targetDocumentSetId: 'ds',
+        files: [buildIndexedFile('a')],
+      });
+      captured.dispatch!({ type: 'SET_AGGREGATE', status: 'Completed' });
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(__TESTING__.INDEXED_FADE_MS + 100);
+    });
+
+    expect(captured.state!.files).toHaveLength(0);
   });
 });

@@ -108,7 +108,6 @@ describe('CollectionsSidebar', () => {
     handlersOpts: { initial?: Paged<DocumentSetSummary>; activeId?: string } = {},
     hostOverrides: Partial<IndexerAppProps> = {},
     sidebarProps: {
-      uploadInProgress?: boolean;
       onAfterCollectionSelect?: () => void;
     } = {},
   ) => {
@@ -125,7 +124,6 @@ describe('CollectionsSidebar', () => {
         <CollectionsSidebar
           collapsed={false}
           onToggleCollapse={() => {}}
-          uploadInProgress={sidebarProps.uploadInProgress}
           onAfterCollectionSelect={sidebarProps.onAfterCollectionSelect}
         />
       </Harness>,
@@ -229,7 +227,12 @@ describe('CollectionsSidebar', () => {
     expect(onAfter).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call onAfterCollectionSelect when the click is blocked by the upload guard', async () => {
+  it('still selects another collection during an upload — the upload guard no longer lives here', async () => {
+    // Slice #3: cross-collection navigation while a batch is in flight is
+    // allowed. The upload controller pins its poll / /complete / cache
+    // invalidation to the upload's source collection (state.targetDocumentSetId),
+    // so switching does not break the in-flight batch. The "can't start a
+    // second upload elsewhere" guard now lives in useUploadController.acceptDrop.
     const user = userEvent.setup();
     const onAfter = jest.fn();
     renderSidebar(
@@ -246,10 +249,10 @@ describe('CollectionsSidebar', () => {
         activeId: 'ds-active',
       },
       {},
-      { uploadInProgress: true, onAfterCollectionSelect: onAfter },
+      { onAfterCollectionSelect: onAfter },
     );
     await user.click(await screen.findByRole('button', { name: 'Other' }));
-    expect(onAfter).not.toHaveBeenCalled();
+    expect(onAfter).toHaveBeenCalledTimes(1);
   });
 
   it('toggles the collapse state via the host-supplied callback', async () => {
@@ -300,7 +303,10 @@ describe('CollectionsSidebar', () => {
     });
   });
 
-  it('blocks switching while uploadInProgress and surfaces a toast', async () => {
+  it('allows switching collections without surfacing an upload toast', async () => {
+    // Slice #3: the sidebar no longer emits an "Upload in progress" toast.
+    // Cross-collection navigation is always allowed; the in-flight upload
+    // continues to poll its source collection in the background.
     const user = userEvent.setup();
     installFetch({
       items: [
@@ -312,38 +318,25 @@ describe('CollectionsSidebar', () => {
       pageSize: 100,
     });
 
-    const { rerender } = render(
+    render(
       <Harness>
-        <CollectionsSidebar
-          collapsed={false}
-          onToggleCollapse={() => {}}
-          uploadInProgress={false}
-        />
+        <CollectionsSidebar collapsed={false} onToggleCollapse={() => {}} />
       </Harness>,
     );
 
-    // First, activate row A in a no-upload state so it becomes the active row.
     const rowA = await screen.findByRole('button', { name: 'A' });
     await user.click(rowA);
     await waitFor(() => {
       expect(rowA.closest('li')).toHaveAttribute('aria-current', 'true');
     });
 
-    // Now flip uploadInProgress=true and try to switch — the guard fires.
-    rerender(
-      <Harness>
-        <CollectionsSidebar
-          collapsed={false}
-          onToggleCollapse={() => {}}
-          uploadInProgress
-        />
-      </Harness>,
-    );
-
     const rowB = await screen.findByRole('button', { name: 'B' });
     await user.click(rowB);
+    await waitFor(() => {
+      expect(rowB.closest('li')).toHaveAttribute('aria-current', 'true');
+    });
 
-    expect(await screen.findByText(/Upload in progress/)).toBeInTheDocument();
+    expect(screen.queryByText(/Upload in progress/)).not.toBeInTheDocument();
   });
 
   it('has no axe violations in the loaded state', async () => {

@@ -268,7 +268,6 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
           <CollectionsSidebar
             collapsed={sidebarState.collapsed}
             onToggleCollapse={onToggleSidebar}
-            uploadInProgress={uploadController.isInFlight}
             onAfterCollectionSelect={closeMobileSidebar}
           />
         </div>

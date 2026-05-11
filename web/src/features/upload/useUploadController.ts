@@ -7,6 +7,7 @@ import type {
 } from '@shared/types';
 import { useApiClient } from '../../hooks/useApiClient';
 import { usePolling } from '../../hooks/usePolling';
+import { useToast } from '../../hooks/useToast';
 import { ApiClientError } from '../../api/client';
 import {
   completeBatch,
@@ -28,7 +29,12 @@ import {
   fromFileList,
   walkDataTransfer,
 } from './folderEntryWalk';
-import { useUploadDispatch, useUploadState } from './state';
+import {
+  isUploadFinished,
+  isUploadInFlight,
+  useUploadDispatch,
+  useUploadState,
+} from './state';
 
 // Concurrency cap for `POST /documents`. Default per
 // document-pipeline/web-document-upload.md §"Sliding window of 5".
@@ -169,6 +175,15 @@ export const useUploadController = (
   const dispatch = useUploadDispatch();
   const client = useApiClient();
   const queryClient = useQueryClient();
+  const toast = useToast();
+
+  // The collection the in-flight batch was started in. Different from the
+  // `documentSetId` hook arg, which tracks the currently active collection.
+  // Allowing navigation between collections during an upload (rather than
+  // freezing the sidebar — see CollectionsSidebar) means the pump / poll /
+  // /complete / cache invalidation must all stay pinned to the upload's home,
+  // not the user's current view.
+  const uploadDocumentSetId = state.targetDocumentSetId || null;
 
   // The set of clientIds currently uploading — bounds concurrency without
   // touching React state on every dispatch.
@@ -185,17 +200,17 @@ export const useUploadController = (
   // ---------------------------------------------------------------------------
 
   const ensureBatchId = useCallback(async (): Promise<string | null> => {
-    if (!documentSetId) return null;
+    if (!uploadDocumentSetId) return null;
     if (stateRef.current.batchId) return stateRef.current.batchId;
     try {
-      const batch = await createBatch(client, documentSetId);
+      const batch = await createBatch(client, uploadDocumentSetId);
       dispatch({ type: 'SET_BATCH_ID', batchId: batch.batchId });
       return batch.batchId;
     } catch {
       // The pump loop marks affected files Failed individually.
       return null;
     }
-  }, [client, dispatch, documentSetId]);
+  }, [client, dispatch, uploadDocumentSetId]);
 
   // ---------------------------------------------------------------------------
   // Core upload pump — sliding window of CONCURRENT_UPLOADS.
@@ -203,7 +218,7 @@ export const useUploadController = (
 
   const uploadOne = useCallback(
     async (file: UploadFile, batchId: string) => {
-      if (!documentSetId) return;
+      if (!uploadDocumentSetId) return;
       inFlightRef.current.add(file.clientId);
       dispatch({
         type: 'PATCH_FILE',
@@ -233,7 +248,7 @@ export const useUploadController = (
       }
       try {
         const accepted = await uploadDocument(client, {
-          documentSetId,
+          documentSetId: uploadDocumentSetId,
           batchId,
           folderId: file.targetFolderId,
           fileType: classification.fileTypeCode,
@@ -278,14 +293,14 @@ export const useUploadController = (
         inFlightRef.current.delete(file.clientId);
       }
     },
-    [client, dispatch, documentSetId],
+    [client, dispatch, uploadDocumentSetId],
   );
 
   // The pump runs whenever the queue or the in-flight set changes. It picks
   // up to CONCURRENT_UPLOADS files and starts each one as a fire-and-forget
   // promise; `inFlightRef` keeps it from launching the same file twice.
   useEffect(() => {
-    if (!documentSetId) return;
+    if (!uploadDocumentSetId) return;
     const queue = state.files.filter((file) => file.status === 'Queued');
     if (queue.length === 0) return;
     const free = CONCURRENT_UPLOADS - inFlightRef.current.size;
@@ -316,7 +331,7 @@ export const useUploadController = (
         void uploadOne(file, batchId);
       });
     })();
-  }, [state.files, documentSetId, dispatch, ensureBatchId, uploadOne]);
+  }, [state.files, uploadDocumentSetId, dispatch, ensureBatchId, uploadOne]);
 
   // ---------------------------------------------------------------------------
   // /complete signal — fired once after every file leaves the upload phase.
@@ -326,7 +341,7 @@ export const useUploadController = (
   const completeInFlightRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!documentSetId || !state.batchId) return;
+    if (!uploadDocumentSetId || !state.batchId) return;
     if (state.files.length === 0) return;
     if (completeFiredRef.current === state.batchId) return;
     if (completeInFlightRef.current === state.batchId) return;
@@ -351,13 +366,13 @@ export const useUploadController = (
     completeInFlightRef.current = targetBatchId;
     void (async () => {
       try {
-        await completeBatch(client, documentSetId, targetBatchId);
+        await completeBatch(client, uploadDocumentSetId, targetBatchId);
         completeFiredRef.current = targetBatchId;
       } catch (error) {
         // eslint-disable-next-line no-console
         console.warn(
           '[indexer] /complete failed; will retry on next state change',
-          { documentSetId, batchId: targetBatchId, error },
+          { documentSetId: uploadDocumentSetId, batchId: targetBatchId, error },
         );
       } finally {
         if (completeInFlightRef.current === targetBatchId) {
@@ -365,7 +380,7 @@ export const useUploadController = (
         }
       }
     })();
-  }, [client, documentSetId, state.batchId, state.files]);
+  }, [client, uploadDocumentSetId, state.batchId, state.files]);
 
   // ---------------------------------------------------------------------------
   // Status polling — pauses when no documents are awaiting indexing.
@@ -413,9 +428,9 @@ export const useUploadController = (
         aggregate === 'Completed' ||
         aggregate === 'CompletedWithErrors'
       ) {
-        if (documentSetId) {
+        if (uploadDocumentSetId) {
           queryClient.invalidateQueries({
-            queryKey: queryKeys.folders.tree(documentSetId),
+            queryKey: queryKeys.folders.tree(uploadDocumentSetId),
           });
           queryClient.invalidateQueries({
             predicate: (query) =>
@@ -424,19 +439,19 @@ export const useUploadController = (
         }
       }
     },
-    [dispatch, documentSetId, queryClient],
+    [dispatch, uploadDocumentSetId, queryClient],
   );
 
   const pollOnce = useCallback(async () => {
-    if (!documentSetId || !state.batchId) return;
+    if (!uploadDocumentSetId || !state.batchId) return;
     try {
-      const response = await getBatchStatus(client, documentSetId, state.batchId);
+      const response = await getBatchStatus(client, uploadDocumentSetId, state.batchId);
       reconcileStatus(response);
     } catch {
       // Polling failures are surfaced through the normal banner state on
       // the next successful tick — no need to mutate state here.
     }
-  }, [client, documentSetId, state.batchId, reconcileStatus]);
+  }, [client, uploadDocumentSetId, state.batchId, reconcileStatus]);
 
   const stillIndexing = state.files.some(
     (file) =>
@@ -447,19 +462,34 @@ export const useUploadController = (
   usePolling(pollOnce, {
     intervalMs: POLLING_INTERVAL_MS,
     enabled:
-      documentSetId !== null &&
+      uploadDocumentSetId !== null &&
       state.batchId !== null &&
       stillIndexing,
     pauseOnHidden: true,
   });
 
   // ---------------------------------------------------------------------------
-  // Indexed-fade timers — drop "Indexed" rows from the session view 8 s
-  // after they appear so a long-running session doesn't accumulate.
+  // Indexed-fade timers — drop "Indexed" rows from the session view 8 s after
+  // they appear so a long-running session doesn't accumulate.
+  //
+  // Gated on a terminal batch status: fading mid-batch made the progress
+  // banner read "Indexed 1 of 1 / 0 of 0 / Indexed 1 of 1 …" as each row
+  // dropped out of the totals while peers were still indexing. We now only
+  // fade once the batch is Completed / CompletedWithErrors, so the totals
+  // stay accurate throughout the session.
   // ---------------------------------------------------------------------------
+
+  const batchIsTerminal = isUploadFinished(state.aggregateStatus);
 
   useEffect(() => {
     const timers = indexedFadeRef.current;
+    if (!batchIsTerminal) {
+      // Cancel any timers armed during a previous terminal state — the user
+      // may have started a follow-up batch before the fade fired.
+      for (const handle of timers.values()) clearTimeout(handle);
+      timers.clear();
+      return;
+    }
     for (const file of state.files) {
       if (file.status === 'Indexed' && !timers.has(file.clientId)) {
         const handle = setTimeout(() => {
@@ -473,7 +503,7 @@ export const useUploadController = (
         timers.delete(file.clientId);
       }
     }
-  }, [state.files, dispatch]);
+  }, [state.files, dispatch, batchIsTerminal]);
 
   // Clear all fade timers on unmount.
   useEffect(() => {
@@ -500,6 +530,23 @@ export const useUploadController = (
   const acceptDrop = useCallback(
     async (input: SubmissionInputs, options: AcceptOptions) => {
       if (!documentSetId) return;
+
+      // One in-flight upload at a time. Allowing the user to browse other
+      // collections during an upload (slice #3) means we have to refuse a
+      // second drop targeting a different collection — otherwise
+      // START_SESSION below would wipe the in-flight session's state.
+      const existingTarget = stateRef.current.targetDocumentSetId;
+      if (
+        existingTarget &&
+        existingTarget !== documentSetId &&
+        isUploadInFlight(stateRef.current.aggregateStatus)
+      ) {
+        toast.push(
+          'Upload in progress — finish before starting another in a different collection.',
+          'info',
+        );
+        return;
+      }
 
       let dropped: DroppedFile[] = [];
       if (input.dataTransfer) {
@@ -585,7 +632,7 @@ export const useUploadController = (
       // Re-arm the /complete trigger for the (possibly new) batch.
       completeFiredRef.current = null;
     },
-    [client, dispatch, documentSetId, queryClient],
+    [client, dispatch, documentSetId, queryClient, toast],
   );
 
   const retry = useCallback(

@@ -17,6 +17,7 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.9.0",
     "@microsoft/applicationinsights-web": "^3.3.8",
     "@module-federation/enhanced": "^2.4.0",
     "@phosphor-icons/react": "^2.1.10",

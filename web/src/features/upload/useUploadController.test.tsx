@@ -221,7 +221,7 @@ describe('useUploadController', () => {
     installFetch({ acceptedIds: [] });
     render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
     const f = new File([new ArrayBuffer(0)], 'huge.pdf', { type: 'application/pdf' });
-    Object.defineProperty(f, 'size', { value: 51 * 1024 * 1024 });
+    Object.defineProperty(f, 'size', { value: 101 * 1024 * 1024 });
 
     await act(async () => {
       await captured.controller!.acceptDrop(
@@ -232,7 +232,7 @@ describe('useUploadController', () => {
 
     await waitFor(() => {
       expect(captured.state!.files[0]?.status).toBe('Failed');
-      expect(captured.state!.files[0]?.failureReason).toMatch(/50 MB/);
+      expect(captured.state!.files[0]?.failureReason).toMatch(/100 MB/);
     });
   });
 

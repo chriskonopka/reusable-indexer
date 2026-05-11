@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/global.css';
 import { IndexerApp } from './IndexerApp';
 import { createStubHost } from './host/stubHost';
+import { createRealHost } from './host/realHost';
 import { installStubFetch, isStubModeRequested } from './host/stubFetch';
 
 // Standalone dev shell. In Module Federation deployments the consuming app
@@ -13,38 +14,73 @@ import { installStubFetch, isStubModeRequested } from './host/stubFetch';
 // the shared singleton scope (react, react-dom) before any React code runs.
 // This is the standard MF async-boundary pattern.
 //
-// When the URL contains `?stub=1`, the indexer installs an in-memory fetch
-// shim so e2e flows can run without a live backend. Production builds
-// served from a real consumer never see this flag — it is dev-only.
+// Three URL modes:
+//   - default       : stub host (no real auth, no real API calls — layout work only).
+//   - ?stub=1       : stub host + in-memory fetch shim (e2e suite).
+//   - ?real=1       : real MSAL host against the live GlobalIndexer API
+//                     (shake-down / integration validation).
 
-if (isStubModeRequested()) {
-  installStubFetch();
-}
-
-const rootElement = document.getElementById('root');
-
-if (!rootElement) {
-  throw new Error('Root element not found. Ensure <div id="root"> exists in index.html.');
-}
-
-// Expose recorded host events on window so Playwright can assert on them.
-const recordedEvents: unknown[] = [];
 declare global {
   interface Window {
     __indexerEvents?: unknown[];
   }
 }
-window.__indexerEvents = recordedEvents;
 
-const host = createStubHost();
-createRoot(rootElement).render(
-  <StrictMode>
-    <IndexerApp
-      {...host}
-      onEvent={(event) => {
-        recordedEvents.push(event);
-        host.onEvent?.(event);
-      }}
-    />
-  </StrictMode>,
-);
+// Real-mode persists across the MSAL redirect cycle. Entra returns to the
+// registered redirect URI (`http://localhost:5174/`) and appends the auth
+// code as a URL fragment — the original `?real=1` query string is dropped.
+// sessionStorage carries the choice through the round trip.
+const REAL_MODE_KEY = 'mws_indexer_real_mode';
+
+const isRealModeRequested = (): boolean => {
+  const params = new URLSearchParams(window.location.search);
+
+  // Explicit stub mode wins and clears any persistent real-mode flag.
+  if (params.has('stub')) {
+    sessionStorage.removeItem(REAL_MODE_KEY);
+    return false;
+  }
+
+  // Explicit real mode sets persistent flag for the redirect round trip.
+  if (params.has('real')) {
+    sessionStorage.setItem(REAL_MODE_KEY, '1');
+    return true;
+  }
+
+  // Fall back to persistent flag (the MSAL redirect-back path).
+  return sessionStorage.getItem(REAL_MODE_KEY) === '1';
+};
+
+const initializeAndRender = async (): Promise<void> => {
+  const useRealHost = isRealModeRequested();
+
+  if (!useRealHost && isStubModeRequested()) {
+    installStubFetch();
+  }
+
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    throw new Error('Root element not found. Ensure <div id="root"> exists in index.html.');
+  }
+
+  const recordedEvents: unknown[] = [];
+  window.__indexerEvents = recordedEvents;
+
+  const host = useRealHost
+    ? await createRealHost({ clientId: process.env.MSAL_CLIENT_ID || '' })
+    : createStubHost();
+
+  createRoot(rootElement).render(
+    <StrictMode>
+      <IndexerApp
+        {...host}
+        onEvent={(event) => {
+          recordedEvents.push(event);
+          host.onEvent?.(event);
+        }}
+      />
+    </StrictMode>,
+  );
+};
+
+void initializeAndRender();

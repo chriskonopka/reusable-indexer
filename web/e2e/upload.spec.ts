@@ -47,7 +47,7 @@ test.describe('Upload pipeline — S3 user flow', () => {
     // fixture to a temp file and load it from disk instead.
     const tempDir = mkdtempSync(join(tmpdir(), 'oversize-'));
     const tempFile = join(tempDir, 'huge.pdf');
-    writeFileSync(tempFile, Buffer.alloc(51 * 1024 * 1024));
+    writeFileSync(tempFile, Buffer.alloc(101 * 1024 * 1024));
     try {
       await page.getByLabel('Add files').setInputFiles(tempFile);
       const banner = page.getByRole('region', { name: 'Upload progress' });

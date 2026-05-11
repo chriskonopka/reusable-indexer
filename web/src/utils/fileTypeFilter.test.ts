@@ -48,7 +48,7 @@ describe('classify', () => {
         type: 'application/pdf',
         size: MAX_FILE_SIZE_BYTES + 1,
       }),
-    ).toEqual({ kind: 'too-large', reason: 'File too large — 50 MB max.' });
+    ).toEqual({ kind: 'too-large', reason: 'File too large — 100 MB max.' });
   });
 
   it('rejects unsupported extensions even when MIME looks plausible', () => {

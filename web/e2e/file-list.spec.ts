@@ -158,7 +158,7 @@ test.describe('File list — S2 user flow', () => {
     await expect(page.getByText('overview.pdf')).toBeVisible();
 
     await page.getByRole('checkbox', { name: 'Select overview.pdf' }).check();
-    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(page.getByText('1 document selected')).toBeVisible();
 
     await page.getByRole('button', { name: /Delete 1 selected/ }).click();
     const dialog = page.getByRole('dialog', { name: /Delete document overview\.pdf/ });

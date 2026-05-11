@@ -3,6 +3,7 @@ import {
   memo,
   useCallback,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -15,6 +16,13 @@ import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
 import { Pill } from '../../components/Pill';
 import { useToast } from '../../hooks/useToast';
+import { useMoveDocument } from '../../hooks/useMoveDocument';
+import {
+  DND_MIME_DOCUMENT_ID,
+  DND_MIME_DOCUMENT_SOURCE_FOLDER,
+  DND_ROOT_FOLDER_SENTINEL,
+} from '../../utils/dndMime';
+import { SELECTION_CAP_PER_KIND, useSelection } from '../selection';
 import { useFolderTree, useCreateFolder, useRenameFolder, useMoveFolder, useDeleteFolder } from './queries';
 import { useFolderTreeState } from './state';
 import { DeleteFolderModal } from './DeleteFolderModal';
@@ -23,6 +31,29 @@ import styles from './FolderTree.module.css';
 // ---------------------------------------------------------------------------
 // Tree traversal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Walk the tree to find the slash-joined path to a folder ("Parent/Child/Leaf").
+ * Returns just the leaf name when the folder is at the top level. Returns the
+ * leaf name alone if the folder isn't found (graceful fallback for races where
+ * the user checks a folder that's already been deleted server-side).
+ */
+const buildFolderPath = (
+  nodes: FolderTreeNodeData[],
+  targetId: string,
+  fallback: string,
+): string => {
+  const walk = (list: FolderTreeNodeData[], path: string[]): string | null => {
+    for (const node of list) {
+      const nextPath = [...path, node.name];
+      if (node.folderId === targetId) return nextPath.join('/');
+      const found = walk(node.children, nextPath);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(nodes, []) ?? fallback;
+};
 
 const collectDescendantIds = (nodes: FolderTreeNodeData[], targetId: string): Set<string> => {
   const result = new Set<string>();
@@ -121,6 +152,8 @@ interface NodeProps {
   draggingFolderId: string | null;
   dragInvalidIds: Set<string>;
   dragOverFolderId: string | null;
+  /** Folder IDs currently in the chat-scope selection. */
+  selectedFolderIds: Set<string>;
   isReadOnly: boolean;
   aggregateStatuses?: Map<string | null, FolderAggregateStatus>;
   onSelect: (folderId: string) => void;
@@ -133,7 +166,8 @@ interface NodeProps {
   onDragStart: (folderId: string) => void;
   onDragEnd: () => void;
   onDragOver: (folderId: string, event: React.DragEvent<HTMLDivElement>) => void;
-  onDrop: (targetFolderId: string) => void;
+  onDrop: (targetFolderId: string, event: React.DragEvent<HTMLDivElement>) => void;
+  onToggleSelect: (folderId: string, folderName: string) => void;
   onFailureBadgeClick?: (folderId: string | null) => void;
 }
 
@@ -148,6 +182,7 @@ const FolderTreeNodeBase = ({
   draggingFolderId,
   dragInvalidIds,
   dragOverFolderId,
+  selectedFolderIds,
   isReadOnly,
   aggregateStatuses,
   onSelect,
@@ -161,6 +196,7 @@ const FolderTreeNodeBase = ({
   onDragEnd,
   onDragOver,
   onDrop,
+  onToggleSelect,
   onFailureBadgeClick,
 }: NodeProps) => {
   const isExpanded = expandedIds.includes(node.folderId);
@@ -169,6 +205,7 @@ const FolderTreeNodeBase = ({
   const isDragging = draggingFolderId === node.folderId;
   const isInvalidTarget = dragInvalidIds.has(node.folderId);
   const isDragTarget = dragOverFolderId === node.folderId && !isInvalidTarget;
+  const isFolderSelected = selectedFolderIds.has(node.folderId);
   const hasChildren = node.children.length > 0;
   const aggregateStatus = aggregateStatuses?.get(node.folderId) ?? null;
   const aggregatePill = aggregateStatus ? aggregatePillFor(aggregateStatus) : null;
@@ -209,9 +246,19 @@ const FolderTreeNodeBase = ({
         onDragOver={(event) => onDragOver(node.folderId, event)}
         onDrop={(event) => {
           event.preventDefault();
-          onDrop(node.folderId);
+          onDrop(node.folderId, event);
         }}
       >
+        {!isReadOnly && (
+          <input
+            type="checkbox"
+            className={styles.selectCheckbox}
+            aria-label={`Select ${node.name} for chat scope`}
+            checked={isFolderSelected}
+            onChange={() => onToggleSelect(node.folderId, node.name)}
+            onClick={(event) => event.stopPropagation()}
+          />
+        )}
         <button
           type="button"
           className={styles.expandToggle}
@@ -324,6 +371,7 @@ const FolderTreeNodeBase = ({
               draggingFolderId={draggingFolderId}
               dragInvalidIds={dragInvalidIds}
               dragOverFolderId={dragOverFolderId}
+              selectedFolderIds={selectedFolderIds}
               isReadOnly={isReadOnly}
               aggregateStatuses={aggregateStatuses}
               onSelect={onSelect}
@@ -337,6 +385,7 @@ const FolderTreeNodeBase = ({
               onDragEnd={onDragEnd}
               onDragOver={onDragOver}
               onDrop={onDrop}
+              onToggleSelect={onToggleSelect}
               onFailureBadgeClick={onFailureBadgeClick}
             />
           ))}
@@ -409,8 +458,29 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
     const createMutation = useCreateFolder();
     const renameMutation = useRenameFolder();
     const moveMutation = useMoveFolder();
+    const moveDocumentMutation = useMoveDocument();
     const deleteMutation = useDeleteFolder();
     const { push: pushToast } = useToast();
+    const selection = useSelection();
+
+    const selectedFolderIds = useMemo(
+      () => new Set(selection.state.folders.map((row) => row.folderId)),
+      [selection.state.folders],
+    );
+
+    const handleToggleSelect = useCallback(
+      (folderId: string, folderName: string) => {
+        const path = buildFolderPath(treeData?.roots ?? [], folderId, folderName);
+        const outcome = selection.toggleFolder({ folderId, folderName, path });
+        if (outcome === 'cap-reached') {
+          pushToast(
+            `Selection limit reached — at most ${SELECTION_CAP_PER_KIND} folders can be selected at once.`,
+            'info',
+          );
+        }
+      },
+      [selection, treeData, pushToast],
+    );
 
     // Inline-rename state
     const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -516,6 +586,17 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
 
     const handleDragOver = useCallback(
       (folderId: string, event: React.DragEvent<HTMLDivElement>) => {
+        // Document drag: any folder is a valid target. The 64-cap and
+        // ownership/dupes are server-side concerns. `dataTransfer` is
+        // optional-chained because jsdom omits it on synthetic events.
+        const isDocumentDrag =
+          event.dataTransfer?.types.includes(DND_MIME_DOCUMENT_ID) ?? false;
+        if (isDocumentDrag) {
+          event.preventDefault();
+          setDragOverFolderId(folderId);
+          return;
+        }
+        // Folder drag: descendants are invalid (would create a cycle).
         if (!dragInvalidIdsRef.current.has(folderId)) {
           event.preventDefault(); // allow drop
         }
@@ -525,9 +606,46 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
     );
 
     const handleDrop = useCallback(
-      (targetFolderId: string) => {
+      (targetFolderId: string, event: React.DragEvent<HTMLDivElement>) => {
+        // The newFolderId wire value matches the folder-move contract:
+        // `null` means the document-set root.
+        const newFolderId =
+          targetFolderId === DND_ROOT_FOLDER_SENTINEL ? null : targetFolderId;
+
+        const droppedDocumentId =
+          event.dataTransfer?.getData(DND_MIME_DOCUMENT_ID) ?? '';
+        if (droppedDocumentId) {
+          const rawSource =
+            event.dataTransfer?.getData(DND_MIME_DOCUMENT_SOURCE_FOLDER) ?? '';
+          const sourceFolderId =
+            !rawSource || rawSource === DND_ROOT_FOLDER_SENTINEL ? null : rawSource;
+          setDragOverFolderId(null);
+          // Same-folder drop is a no-op — don't burn a round-trip on it.
+          if (sourceFolderId === newFolderId) return;
+          moveDocumentMutation.mutate(
+            {
+              documentSetId,
+              documentId: droppedDocumentId,
+              sourceFolderId,
+              body: { newFolderId },
+            },
+            {
+              onError: (error) => {
+                const msg = (error as Error).message;
+                pushToast(
+                  msg?.includes('duplicate-filename')
+                    ? 'A document with this name already exists in the target folder.'
+                    : (msg ?? 'Could not move document.'),
+                  'error',
+                );
+              },
+            },
+          );
+          return;
+        }
+
+        // Folder-move path (existing behaviour).
         const sourceFolderId = draggingFolderId;
-        // Capture before clearing — the cycle check needs the populated Set.
         const invalidIds = dragInvalidIdsRef.current;
         setDraggingFolderId(null);
         setDragOverFolderId(null);
@@ -535,10 +653,12 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
 
         if (!sourceFolderId || invalidIds.has(targetFolderId)) return;
 
-        // Wire contract: newParentFolderId is `string | null` (null = root).
-        const newParentFolderId = targetFolderId === '__root__' ? null : targetFolderId;
         moveMutation.mutate(
-          { documentSetId, folderId: sourceFolderId, body: { newParentFolderId } },
+          {
+            documentSetId,
+            folderId: sourceFolderId,
+            body: { newParentFolderId: newFolderId },
+          },
           {
             onError: (error) => {
               const msg = (error as Error).message;
@@ -552,7 +672,7 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
           },
         );
       },
-      [draggingFolderId, documentSetId, moveMutation, pushToast],
+      [draggingFolderId, documentSetId, moveDocumentMutation, moveMutation, pushToast],
     );
 
     const handleDeleteConfirm = useCallback(() => {
@@ -611,6 +731,7 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
       draggingFolderId,
       dragInvalidIds: dragInvalidIdsRef.current,
       dragOverFolderId,
+      selectedFolderIds,
       isReadOnly,
       aggregateStatuses,
       onSelect: onFolderSelect,
@@ -624,6 +745,7 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
       onDragEnd: handleDragEnd,
       onDragOver: handleDragOver,
       onDrop: handleDrop,
+      onToggleSelect: handleToggleSelect,
       onFailureBadgeClick,
     };
 
@@ -642,16 +764,16 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
                 .join(' ')}
               aria-current={activeFolderId === null ? 'true' : undefined}
               onDragOver={(event) => {
-                if (draggingFolderId) {
+                const isDocumentDrag =
+                  event.dataTransfer?.types.includes(DND_MIME_DOCUMENT_ID) ?? false;
+                if (draggingFolderId || isDocumentDrag) {
                   event.preventDefault();
-                  setDragOverFolderId('__root__');
+                  setDragOverFolderId(DND_ROOT_FOLDER_SENTINEL);
                 }
               }}
               onDrop={(event) => {
                 event.preventDefault();
-                if (draggingFolderId) {
-                  handleDrop('__root__');
-                }
+                handleDrop(DND_ROOT_FOLDER_SENTINEL, event);
               }}
               onClick={() => onFolderSelect(null)}
             >

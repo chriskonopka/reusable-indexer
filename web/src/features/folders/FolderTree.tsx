@@ -807,29 +807,34 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
             })()}
           </div>
 
-          {isEmpty ? (
-            <EmptyState
-              title="No folders yet"
-              body={isReadOnly ? '' : "Click '+' to create a folder."}
-            />
-          ) : (
-            <ul
-              role="tree"
-              aria-label="Folder tree"
-              className={styles.rootList}
-            >
-              {roots.map((node) => (
-                <FolderTreeNode key={node.folderId} node={node} depth={0} {...sharedNodeProps} />
-              ))}
-              {creatingUnder?.parentFolderId === null && (
-                <CreateFolderRow
-                  parentFolderId={null}
-                  onSubmit={handleCreateSubmit}
-                  onCancel={() => setCreatingUnder(null)}
-                />
-              )}
-            </ul>
-          )}
+          {/* Scrollable region — the New folder footer below sits outside this
+              container so it stays pinned to the bottom of the pane regardless
+              of how many folders the user has. */}
+          <div className={styles.listArea}>
+            {isEmpty ? (
+              <EmptyState
+                title="No folders yet"
+                body={isReadOnly ? '' : "Click '+' to create a folder."}
+              />
+            ) : (
+              <ul
+                role="tree"
+                aria-label="Folder tree"
+                className={styles.rootList}
+              >
+                {roots.map((node) => (
+                  <FolderTreeNode key={node.folderId} node={node} depth={0} {...sharedNodeProps} />
+                ))}
+                {creatingUnder?.parentFolderId === null && (
+                  <CreateFolderRow
+                    parentFolderId={null}
+                    onSubmit={handleCreateSubmit}
+                    onCancel={() => setCreatingUnder(null)}
+                  />
+                )}
+              </ul>
+            )}
+          </div>
 
           {!isReadOnly && (
             <button

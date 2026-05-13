@@ -291,6 +291,19 @@ describe('FolderTree', () => {
     expect(alpha).toHaveAttribute('title', 'Alpha');
   });
 
+  // Regression: the footer "New folder" button must stay rendered as a sibling
+  // of the folder list, not inside the scrollable list region, so it remains
+  // visible at the bottom of the pane whether the user has zero or many folders.
+  it('keeps the New folder footer button rendered alongside the folder tree', async () => {
+    renderTree();
+    await screen.findByText('Alpha');
+    const footer = screen.getByRole('button', { name: 'Create folder at root level' });
+    expect(footer).toBeInTheDocument();
+    // The footer must not live inside the role="tree" list — it has to be a
+    // sibling so layout/scroll on the list never pushes it out of view.
+    expect(screen.getByRole('tree', { name: 'Folder tree' })).not.toContainElement(footer);
+  });
+
   // ── Selection ───────────────────────────────────────────────────────────────
 
   it('calls onFolderSelect(null) when All files is clicked', async () => {

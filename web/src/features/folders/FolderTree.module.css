@@ -2,9 +2,17 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 8px 0;
   gap: 2px;
+}
+
+/* Owns the scrollable region so the "New folder" footer button stays pinned
+   to the bottom of the pane regardless of folder count. */
+.listArea {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ─── "All files" root button ──────────────────────────────────────────────── */
@@ -43,7 +51,6 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  flex: 1;
 }
 
 /* ─── Tree item (li) ────────────────────────────────────────────────────────── */

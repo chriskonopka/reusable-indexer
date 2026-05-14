@@ -207,6 +207,14 @@ export interface IndexerAppProps {
    */
   initialTheme?: 'light' | 'dark';
 
+  /**
+   * Optional. When `true`, the indexer's built-in header theme-toggle button
+   * is not rendered — for hosts that already provide a theme control in their
+   * own chrome and want to avoid two redundant toggles. The indexer's
+   * underlying theme state and `initialTheme` handling are unaffected.
+   */
+  hideThemeToggle?: boolean;
+
   /** Optional. Deep-link the indexer at mount time. */
   initialState?: IndexerInitialState;
 

@@ -31,6 +31,7 @@ import { useKeyboardEscape } from '../hooks/useKeyboardEscape';
 import { isHydrateAction, usePersistedReducer } from '../hooks/usePersistedReducer';
 import { useTheme } from '../theme/ThemeProvider';
 import { useHost } from '../host/useHost';
+import { useSelection } from '../features/selection';
 import { useToast } from '../hooks/useToast';
 import styles from './RootShell.module.css';
 
@@ -79,6 +80,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
   const { hideThemeToggle } = useHost();
   const client = useApiClient();
   const toast = useToast();
+  const selection = useSelection();
 
   // Upload controller — drives the active session for the current collection.
   const uploadController = useUploadController(documentSetId);
@@ -220,8 +222,11 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
           // we surface the failure only by leaving the UI unchanged.
         }
       },
+      deselectDocument: (documentId: string) => selection.removeDocument(documentId),
+      deselectFolder: (folderId: string) => selection.removeFolder(folderId),
+      clearSelection: () => selection.clear(),
     }),
-    [select, client, documentSetId],
+    [select, client, documentSetId, selection],
   );
 
   const themeLabel = useMemo(() => (mode === 'dark' ? 'Light mode' : 'Dark mode'), [mode]);

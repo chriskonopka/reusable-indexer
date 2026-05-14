@@ -211,6 +211,46 @@ describe('useSelection', () => {
     expect(result.current.state.folders).toEqual([]);
   });
 
+  it('removeDocument drops only the matching id and leaves the rest', () => {
+    const { result } = renderHook(() => useSelection(), { wrapper: wrapWithProvider });
+    act(() => {
+      result.current.toggleDocument({ documentId: 'd-1', fileName: 'a.pdf' });
+      result.current.toggleDocument({ documentId: 'd-2', fileName: 'b.pdf' });
+    });
+    act(() => result.current.removeDocument('d-1'));
+    expect(result.current.state.documents.map((doc) => doc.documentId)).toEqual(['d-2']);
+  });
+
+  it('removeDocument is a no-op when the id is not in the selection', () => {
+    const { result } = renderHook(() => useSelection(), { wrapper: wrapWithProvider });
+    act(() => {
+      result.current.toggleDocument({ documentId: 'd-1', fileName: 'a.pdf' });
+    });
+    const before = result.current.state;
+    act(() => result.current.removeDocument('d-unknown'));
+    expect(result.current.state).toBe(before);
+  });
+
+  it('removeFolder drops only the matching id and leaves the rest', () => {
+    const { result } = renderHook(() => useSelection(), { wrapper: wrapWithProvider });
+    act(() => {
+      result.current.toggleFolder({ folderId: 'f-1', folderName: 'Foo', path: 'Foo' });
+      result.current.toggleFolder({ folderId: 'f-2', folderName: 'Bar', path: 'Bar' });
+    });
+    act(() => result.current.removeFolder('f-1'));
+    expect(result.current.state.folders.map((folder) => folder.folderId)).toEqual(['f-2']);
+  });
+
+  it('removeFolder is a no-op when the id is not in the selection', () => {
+    const { result } = renderHook(() => useSelection(), { wrapper: wrapWithProvider });
+    act(() => {
+      result.current.toggleFolder({ folderId: 'f-1', folderName: 'Foo', path: 'Foo' });
+    });
+    const before = result.current.state;
+    act(() => result.current.removeFolder('f-unknown'));
+    expect(result.current.state).toBe(before);
+  });
+
   it('useSelectionState mirrors the live state', () => {
     const { result } = renderHook(
       () => ({ api: useSelection(), state: useSelectionState() }),

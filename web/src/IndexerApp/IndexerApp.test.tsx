@@ -59,6 +59,22 @@ describe('IndexerApp scaffold', () => {
     });
   });
 
+  it('exposes deselectDocument, deselectFolder, and clearSelection on the imperative ref', async () => {
+    const ref = createRef<IndexerHandle>();
+    render(<IndexerApp ref={ref} {...makeHost()} />);
+
+    expect(typeof ref.current?.deselectDocument).toBe('function');
+    expect(typeof ref.current?.deselectFolder).toBe('function');
+    expect(typeof ref.current?.clearSelection).toBe('function');
+
+    // No-op safety: calling them with nothing selected must not throw.
+    await act(async () => {
+      ref.current?.deselectDocument('not-selected');
+      ref.current?.deselectFolder('not-selected');
+      ref.current?.clearSelection();
+    });
+  });
+
   it('emits collection/activated with null on first mount', async () => {
     const events: IndexerEvent[] = [];
     render(<IndexerApp {...makeHost({ onEvent: (e) => events.push(e) })} />);

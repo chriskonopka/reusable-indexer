@@ -83,6 +83,29 @@ describe('IndexerApp scaffold', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
+  it('hides the header theme toggle when hideThemeToggle is true', async () => {
+    render(<IndexerApp {...makeHost({ initialTheme: 'light', hideThemeToggle: true })} />);
+    expect(screen.queryByRole('button', { name: /Switch to (dark|light) mode/ })).not.toBeInTheDocument();
+    // initialTheme is still honoured — the toggle is the only thing suppressed.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('keeps the header theme toggle visible when hideThemeToggle is omitted or false', async () => {
+    const { rerender } = render(<IndexerApp {...makeHost({ initialTheme: 'light' })} />);
+    expect(screen.getByRole('button', { name: 'Switch to dark mode' })).toBeInTheDocument();
+
+    rerender(<IndexerApp {...makeHost({ initialTheme: 'light', hideThemeToggle: false })} />);
+    expect(screen.getByRole('button', { name: 'Switch to dark mode' })).toBeInTheDocument();
+  });
+
+  it('has no axe violations with the theme toggle hidden', async () => {
+    const { container } = render(
+      <IndexerApp {...makeHost({ initialTheme: 'light', hideThemeToggle: true })} />,
+    );
+    await screen.findByText("Click 'New collection' to get started.");
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
   it('has no axe violations on first paint', async () => {
     const { container } = render(<IndexerApp {...makeHost()} />);
     // Wait for the empty-state to render.

@@ -30,6 +30,7 @@ import { useApiClient } from '../hooks/useApiClient';
 import { useKeyboardEscape } from '../hooks/useKeyboardEscape';
 import { isHydrateAction, usePersistedReducer } from '../hooks/usePersistedReducer';
 import { useTheme } from '../theme/ThemeProvider';
+import { useHost } from '../host/useHost';
 import { useToast } from '../hooks/useToast';
 import styles from './RootShell.module.css';
 
@@ -75,6 +76,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
     { store: 'ui', key: 'sidebar' },
   );
   const { mode, toggleMode } = useTheme();
+  const { hideThemeToggle } = useHost();
   const client = useApiClient();
   const toast = useToast();
 
@@ -245,14 +247,16 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
           <h1 className={styles.brandTitle}>Reusable Indexer</h1>
           <span className={styles.brandSubtitle}>Document collections</span>
         </div>
-        <button
-          type="button"
-          className={styles.themeToggle}
-          onClick={toggleMode}
-          aria-label={themeAriaLabel}
-        >
-          {themeLabel}
-        </button>
+        {!hideThemeToggle && (
+          <button
+            type="button"
+            className={styles.themeToggle}
+            onClick={toggleMode}
+            aria-label={themeAriaLabel}
+          >
+            {themeLabel}
+          </button>
+        )}
       </header>
 
       <div className={styles.body}>

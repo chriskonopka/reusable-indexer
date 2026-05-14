@@ -10,7 +10,7 @@ test.describe('Indexer scaffold', () => {
   });
 
   test('renders the indexer header and sidebar landmarks', async ({ page }) => {
-    await expect(page.getByRole('heading', { level: 1, name: /Reusable Indexer/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Document Collections/i })).toBeVisible();
     await expect(page.getByRole('complementary', { name: 'Collections' })).toBeVisible();
     await expect(page.getByRole('main', { name: 'Active collection' })).toBeVisible();
   });

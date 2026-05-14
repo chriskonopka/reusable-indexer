@@ -134,6 +134,12 @@ export interface SelectionApi {
     visibleIds: ReadonlyArray<string>,
     next: ReadonlyArray<SelectedDocument>,
   ) => { addedCount: number; capReached: boolean };
+  /** Idempotent remove — drops a document from the selection. No-op if it
+   *  isn't currently selected. Distinct from toggleDocument because the
+   *  IndexerHandle.deselectDocument host method needs a non-toggling primitive. */
+  removeDocument: (documentId: string) => void;
+  /** Idempotent remove — drops a folder from the selection. */
+  removeFolder: (folderId: string) => void;
   clear: () => void;
 }
 
@@ -218,6 +224,28 @@ export const useSelection = (): SelectionApi => {
     [dispatch, stateRef],
   );
 
+  const removeDocument = useCallback(
+    (documentId: string): void => {
+      const current = stateRef.current.documents;
+      if (!current.some((row) => row.documentId === documentId)) return;
+      const nextDocs = current.filter((row) => row.documentId !== documentId);
+      stateRef.current = { ...stateRef.current, documents: nextDocs };
+      dispatch({ type: 'SET_DOCUMENTS', documents: nextDocs });
+    },
+    [dispatch, stateRef],
+  );
+
+  const removeFolder = useCallback(
+    (folderId: string): void => {
+      const current = stateRef.current.folders;
+      if (!current.some((row) => row.folderId === folderId)) return;
+      const nextFolders = current.filter((row) => row.folderId !== folderId);
+      stateRef.current = { ...stateRef.current, folders: nextFolders };
+      dispatch({ type: 'SET_FOLDERS', folders: nextFolders });
+    },
+    [dispatch, stateRef],
+  );
+
   const clear = useCallback(() => {
     stateRef.current = emptyState;
     dispatch({ type: 'CLEAR' });
@@ -230,6 +258,8 @@ export const useSelection = (): SelectionApi => {
     toggleDocument,
     toggleFolder,
     setVisibleDocuments,
+    removeDocument,
+    removeFolder,
     clear,
   };
 };

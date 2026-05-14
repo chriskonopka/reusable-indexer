@@ -155,6 +155,23 @@ export interface IndexerHandle {
    * is not in the active collection.
    */
   revealDocument: (documentId: string) => void;
+  /**
+   * Remove a single document from the indexer's chat-scope selection. The
+   * indexer dispatches its selection reducer and emits the corresponding
+   * `selection/changed` event. No-op if the document isn't currently selected.
+   */
+  deselectDocument: (documentId: string) => void;
+  /**
+   * Remove a single folder from the indexer's chat-scope selection. Emits
+   * `selection/changed`. No-op if the folder isn't currently selected.
+   */
+  deselectFolder: (folderId: string) => void;
+  /**
+   * Clear the indexer's entire chat-scope selection (documents and folders).
+   * Emits a `selection/changed` event with empty arrays. No-op when the
+   * selection is already empty.
+   */
+  clearSelection: () => void;
 }
 
 // =============================================================================

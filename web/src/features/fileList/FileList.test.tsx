@@ -21,6 +21,9 @@ const makeDoc = (overrides: Partial<DocumentMetadataResponse> = {}): DocumentMet
   folderId: null,
   fileName: 'contract.pdf',
   fileType: 'Contract',
+  documentType: null,
+  documentTypeConfidence: null,
+  manuallyClassified: false,
   contentType: 'application/pdf',
   fileSizeBytes: 1024 * 500,
   status: 'Ready',
@@ -218,6 +221,18 @@ describe('FileList', () => {
     renderList({}, [makeDoc(), makeDoc({ documentId: 'doc-2', fileName: 'brief.pdf' })]);
     expect(await screen.findByText('contract.pdf')).toBeInTheDocument();
     expect(screen.getByText('brief.pdf')).toBeInTheDocument();
+  });
+
+  it('renders the Doc type cell with the classified label, falling back to em dash for null', async () => {
+    renderList({}, [
+      makeDoc({ documentId: 'doc-1', fileName: 'reg.pdf', documentType: 'regulatory' }),
+      makeDoc({ documentId: 'doc-2', fileName: 'unknown.pdf', documentType: null }),
+    ]);
+    expect(await screen.findByRole('columnheader', { name: 'Doc type' })).toBeInTheDocument();
+    expect(screen.getByText('regulatory')).toBeInTheDocument();
+    // The null-doc row renders an em dash in the Doc type cell.
+    const dashCells = screen.getAllByText('—');
+    expect(dashCells.length).toBeGreaterThan(0);
   });
 
   it('has no axe violations in the loaded state', async () => {

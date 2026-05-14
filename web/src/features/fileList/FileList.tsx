@@ -311,6 +311,7 @@ const DocumentRowBase = ({
         <StatusBadge status={doc.status} />
       </td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>{doc.fileType}</td>
+      <td className={[styles.cell, styles.cellMeta].join(' ')}>{doc.documentType ?? '—'}</td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>{formatBytes(doc.fileSizeBytes)}</td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>
         {relativeTimeLabel(doc.updatedAt)}
@@ -711,6 +712,12 @@ export const FileList = ({
                     onSortChange={handleSortChange}
                     className={styles.cellMeta}
                   />
+                  <th
+                    className={[styles.headerCell, styles.cellMeta].join(' ')}
+                    scope="col"
+                  >
+                    Doc type
+                  </th>
                   <SortHeader
                     column="size"
                     label="Size"

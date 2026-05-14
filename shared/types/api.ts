@@ -183,6 +183,17 @@ export interface DocumentMetadataResponse {
   folderId: string | null;
   fileName: string;
   fileType: FileTypeCode;
+  /**
+   * Auto-derived document classification (e.g. "regulatory", "report",
+   * "other"). Null when classification was skipped, failed, or hasn't run
+   * yet (e.g. status === 'Failed'). Distinct from `fileType` which is the
+   * coarse file-format code.
+   */
+  documentType: string | null;
+  /** Classifier confidence in [0, 1]. Null when `documentType` is null. */
+  documentTypeConfidence: number | null;
+  /** True when a user overrode the auto-classification. */
+  manuallyClassified: boolean;
   contentType: string;
   fileSizeBytes: number;
   status: DocumentStatus;

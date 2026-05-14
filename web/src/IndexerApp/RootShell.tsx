@@ -244,8 +244,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
           <List size={20} aria-hidden />
         </button>
         <div className={styles.brand}>
-          <h1 className={styles.brandTitle}>Reusable Indexer</h1>
-          <span className={styles.brandSubtitle}>Document collections</span>
+          <h1 className={styles.brandTitle}>Document Collections</h1>
         </div>
         {!hideThemeToggle && (
           <button

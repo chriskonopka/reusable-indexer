@@ -40,7 +40,7 @@ describe('IndexerApp scaffold', () => {
   it('renders the indexer header and sidebar landmarks', async () => {
     render(<IndexerApp {...makeHost()} />);
     expect(
-      screen.getByRole('heading', { level: 1, name: /Reusable Indexer/i }),
+      screen.getByRole('heading', { level: 1, name: /Document Collections/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Collections' })).toBeInTheDocument();
     expect(screen.getByRole('main', { name: 'Active collection' })).toBeInTheDocument();

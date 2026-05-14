@@ -66,10 +66,6 @@ export interface UploadController {
   isInFlight: boolean;
   /** Accept files from a drag-drop event or a picker FileList. */
   acceptDrop: (input: SubmissionInputs, options: AcceptOptions) => Promise<void>;
-  /** Retry a single file (only valid for `Failed` rows where `retryable`). */
-  retry: (clientId: string) => void;
-  /** Retry every retryable failed row. */
-  retryAll: () => void;
   /** Drop a single row from the session view. Does not unsend it. */
   dismiss: (clientId: string) => void;
   /** Drop every failed/skipped/duplicate row. */
@@ -635,42 +631,6 @@ export const useUploadController = (
     [client, dispatch, documentSetId, queryClient, toast],
   );
 
-  const retry = useCallback(
-    (clientId: string) => {
-      const file = stateRef.current.files.find((entry) => entry.clientId === clientId);
-      if (!file || !file.retryable) return;
-      dispatch({
-        type: 'PATCH_FILE',
-        clientId,
-        patch: {
-          status: 'Queued',
-          failureReason: null,
-          severity: null,
-          retryable: false,
-        },
-      });
-      // Retrying re-opens the /complete window.
-      completeFiredRef.current = null;
-    },
-    [dispatch],
-  );
-
-  const retryAll = useCallback(() => {
-    const entries = stateRef.current.files
-      .filter((file) => file.status === 'Failed' && file.retryable)
-      .map((file) => ({
-        clientId: file.clientId,
-        patch: {
-          status: 'Queued' as const,
-          failureReason: null,
-          severity: null,
-          retryable: false,
-        },
-      }));
-    if (entries.length === 0) return;
-    dispatch({ type: 'PATCH_FILES', entries });
-    completeFiredRef.current = null;
-  }, [dispatch]);
 
   const dismiss = useCallback(
     (clientId: string) => {
@@ -702,8 +662,6 @@ export const useUploadController = (
   return {
     isInFlight: hasUnfinishedWork && state.files.length > 0,
     acceptDrop,
-    retry,
-    retryAll,
     dismiss,
     dismissFailures,
     toggleBanner,

@@ -75,33 +75,6 @@ test.describe('Upload pipeline — S3 user flow', () => {
     await expect(banner.getByText('Skipped', { exact: true })).toBeVisible();
   });
 
-  test('retries a transient failure', async ({ page }) => {
-    await createCollection(page);
-    // Tell the stub to fail the first POST /documents transiently.
-    await page.evaluate(() => {
-      const controls = (window as unknown as { __stubControls?: { failNext: number; failNextWith: 'transient' | 'permanent' } }).__stubControls;
-      if (controls) {
-        controls.failNext = 1;
-        controls.failNextWith = 'transient';
-      }
-    });
-    const fileInput = page.getByLabel('Add files');
-    await fileInput.setInputFiles({
-      name: 'flaky.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('%PDF-1.4 stub'),
-    });
-
-    const banner = page.getByRole('region', { name: 'Upload progress' });
-    await expect(banner).toBeVisible();
-    await page.getByRole('button', { name: /View progress/ }).click();
-    // Click the per-row Retry button once it appears.
-    const retry = page.getByRole('button', { name: 'Retry flaky.pdf' });
-    await expect(retry).toBeVisible();
-    await retry.click();
-    await expect(banner).toContainText(/of 1 indexed/);
-  });
-
   test('beforeunload guard fires while a batch is in flight', async ({ page }) => {
     await createCollection(page);
     let promptCount = 0;

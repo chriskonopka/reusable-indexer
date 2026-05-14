@@ -15,7 +15,7 @@ import { UploadProvider, useUploadDispatch, useUploadState } from './state';
 import { __TESTING__, useUploadController } from './useUploadController';
 
 // Integration tests for the upload controller. We stub `fetch` and drive
-// the controller through its public API (acceptDrop, retry, dismiss) and
+// the controller through its public API (acceptDrop, dismiss) and
 // assert state transitions through the captured upload-session state.
 
 const buildHost = (overrides: Partial<IndexerAppProps> = {}): IndexerAppProps => ({
@@ -290,30 +290,6 @@ describe('useUploadController', () => {
     });
   });
 
-  it('retry() requeues a Failed retryable row', async () => {
-    installFetch({ acceptedIds: ['doc-1'], failOnce: 'transient' });
-    render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
-    const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
-
-    await act(async () => {
-      await captured.controller!.acceptDrop(
-        { fileList: buildFileList([f]) },
-        { rootFolderId: null },
-      );
-    });
-
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Failed');
-    });
-
-    const clientId = captured.state!.files[0]!.clientId;
-    act(() => captured.controller!.retry(clientId));
-
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Submitted');
-    });
-  });
-
   it('dismiss() removes a row from the session view', async () => {
     installFetch({ acceptedIds: ['doc-1'] });
     render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
@@ -347,27 +323,6 @@ describe('useUploadController', () => {
     });
 
     expect(captured.state!.files).toHaveLength(0);
-  });
-
-  it('retryAll requeues all retryable failed rows', async () => {
-    installFetch({ acceptedIds: ['doc-1'], failOnce: 'transient' });
-    render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
-    const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
-    await act(async () => {
-      await captured.controller!.acceptDrop(
-        { fileList: buildFileList([f]) },
-        { rootFolderId: null },
-      );
-    });
-
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Failed');
-    });
-    act(() => captured.controller!.retryAll());
-
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Submitted');
-    });
   });
 
   it('dismissFailures drops all failed/skipped/duplicate rows', async () => {
@@ -448,44 +403,6 @@ describe('useUploadController', () => {
       expect(captured.state!.files[0]?.retryable).toBe(true);
     });
     if (originalFetch) global.fetch = originalFetch;
-  });
-
-  it('retryAll is a no-op when there are no retryable failed rows', async () => {
-    installFetch({ acceptedIds: [], failOnce: 'unsupported' });
-    render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
-    const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
-    await act(async () => {
-      await captured.controller!.acceptDrop(
-        { fileList: buildFileList([f]) },
-        { rootFolderId: null },
-      );
-    });
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Unsupported');
-    });
-    const before = captured.state!;
-    act(() => captured.controller!.retryAll());
-    expect(captured.state!.files).toBe(before.files);
-  });
-
-  it('retry is a no-op for non-retryable rows', async () => {
-    installFetch({ acceptedIds: [], failOnce: 'duplicate' });
-    render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
-    const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
-    await act(async () => {
-      await captured.controller!.acceptDrop(
-        { fileList: buildFileList([f]) },
-        { rootFolderId: null },
-      );
-    });
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Duplicate');
-    });
-    const dupId = captured.state!.files[0]!.clientId;
-    const before = captured.state!.files;
-    act(() => captured.controller!.retry(dupId));
-    // No-op: file still Duplicate, same array reference.
-    expect(captured.state!.files).toBe(before);
   });
 
   it('appends to an existing session when called twice for the same collection', async () => {

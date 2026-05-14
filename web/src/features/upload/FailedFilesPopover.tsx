@@ -13,9 +13,7 @@ export interface FailedFilesPopoverProps {
   folderName: string;
   failures: UploadFile[];
   onClose: () => void;
-  onRetry: (clientId: string) => void;
   onDismiss: (clientId: string) => void;
-  onRetryAll: () => void;
   onDismissAll: () => void;
 }
 
@@ -23,9 +21,7 @@ export const FailedFilesPopover = ({
   folderName,
   failures,
   onClose,
-  onRetry,
   onDismiss,
-  onRetryAll,
   onDismissAll,
 }: FailedFilesPopoverProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,10 +31,6 @@ export const FailedFilesPopover = ({
   useEffect(() => {
     containerRef.current?.querySelector<HTMLElement>('button')?.focus();
   }, []);
-
-  const hasRetryable = failures.some(
-    (file) => file.status === 'Failed' && file.retryable,
-  );
 
   if (failures.length === 0) {
     return (
@@ -107,16 +99,6 @@ export const FailedFilesPopover = ({
                 }
               />
               <div className={styles.actions}>
-                {file.status === 'Failed' && file.retryable && (
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => onRetry(file.clientId)}
-                    aria-label={`Retry ${file.file.name}`}
-                  >
-                    Retry
-                  </button>
-                )}
                 <button
                   type="button"
                   className={styles.actionBtn}
@@ -132,11 +114,6 @@ export const FailedFilesPopover = ({
       </ul>
 
       <div className={styles.footer}>
-        {hasRetryable && (
-          <Button size="small" onClick={onRetryAll}>
-            Retry all
-          </Button>
-        )}
         <Button size="small" variant="secondary" onClick={onDismissAll}>
           Dismiss all
         </Button>

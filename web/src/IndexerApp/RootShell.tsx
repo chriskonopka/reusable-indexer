@@ -343,9 +343,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
             }
             failures={failures}
             onClose={() => setFailurePopoverFolderId(undefined)}
-            onRetry={uploadController.retry}
             onDismiss={uploadController.dismiss}
-            onRetryAll={uploadController.retryAll}
             onDismissAll={uploadController.dismissFailures}
           />
         </div>

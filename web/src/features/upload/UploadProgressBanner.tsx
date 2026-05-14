@@ -158,16 +158,6 @@ export const UploadProgressBanner = ({
                     <Pill tone={rowToneFor(file)} label={statusLabel(file)} />
                   </td>
                   <td className={styles.actionsCell}>
-                    {file.status === 'Failed' && file.retryable && (
-                      <button
-                        type="button"
-                        className={styles.rowButton}
-                        onClick={() => controller.retry(file.clientId)}
-                        aria-label={`Retry ${file.file.name}`}
-                      >
-                        Retry
-                      </button>
-                    )}
                     <button
                       type="button"
                       className={styles.rowButton}
@@ -184,13 +174,6 @@ export const UploadProgressBanner = ({
 
           {(totals.failed > 0 || totals.skipped > 0) && (
             <div className={styles.bulkActions}>
-              <Button
-                size="small"
-                variant="secondary"
-                onClick={controller.retryAll}
-              >
-                Retry all
-              </Button>
               <Button
                 size="small"
                 variant="secondary"

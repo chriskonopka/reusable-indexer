@@ -39,17 +39,13 @@ const baseProps = {
     }),
   ],
   onClose: jest.fn(),
-  onRetry: jest.fn(),
   onDismiss: jest.fn(),
-  onRetryAll: jest.fn(),
   onDismissAll: jest.fn(),
 };
 
 beforeEach(() => {
   baseProps.onClose = jest.fn();
-  baseProps.onRetry = jest.fn();
   baseProps.onDismiss = jest.fn();
-  baseProps.onRetryAll = jest.fn();
   baseProps.onDismissAll = jest.fn();
 });
 
@@ -61,39 +57,21 @@ describe('FailedFilesPopover', () => {
     expect(screen.getByText('Unsupported file type.')).toBeInTheDocument();
   });
 
-  it('only shows the per-row Retry button on retryable Failed rows', () => {
+  it('does not render a Retry button on any row', () => {
     render(<FailedFilesPopover {...baseProps} />);
-    // Per-row buttons carry the file name; bulk "Retry all" sits in the footer.
-    expect(screen.getAllByRole('button', { name: /^Retry [^a]/ })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Retry flaky.pdf' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it('fires onRetry / onDismiss with the row id', async () => {
+  it('fires onDismiss with the row id', async () => {
     render(<FailedFilesPopover {...baseProps} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Retry flaky.pdf' }));
-    expect(baseProps.onRetry).toHaveBeenCalledWith('1');
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss flaky.pdf' }));
     expect(baseProps.onDismiss).toHaveBeenCalledWith('1');
   });
 
-  it('shows Retry all only when there are retryable rows; Dismiss all always present', async () => {
+  it('Dismiss all fires onDismissAll', async () => {
     render(<FailedFilesPopover {...baseProps} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Retry all' }));
-    expect(baseProps.onRetryAll).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss all' }));
     expect(baseProps.onDismissAll).toHaveBeenCalled();
-  });
-
-  it('hides Retry all when no failures are retryable', () => {
-    render(
-      <FailedFilesPopover
-        {...baseProps}
-        failures={[
-          file({ status: 'Unsupported', severity: 'Skip', retryable: false }),
-        ]}
-      />,
-    );
-    expect(screen.queryByRole('button', { name: 'Retry all' })).not.toBeInTheDocument();
   });
 
   it('shows the empty state when no failures remain', () => {

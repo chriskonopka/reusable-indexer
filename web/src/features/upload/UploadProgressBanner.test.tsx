@@ -35,8 +35,6 @@ const Seed = ({ files, expanded }: { files: UploadFile[]; expanded?: boolean }) 
 const buildController = (overrides: Partial<UploadController> = {}): UploadController => ({
   isInFlight: true,
   acceptDrop: jest.fn().mockResolvedValue(undefined),
-  retry: jest.fn(),
-  retryAll: jest.fn(),
   dismiss: jest.fn(),
   dismissFailures: jest.fn(),
   toggleBanner: jest.fn(),
@@ -126,7 +124,7 @@ describe('UploadProgressBanner', () => {
     expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
   });
 
-  it('expanded banner exposes a per-file table with retry/dismiss', async () => {
+  it('expanded banner exposes a per-file table with dismiss only', async () => {
     const controller = buildController();
     render(
       <Harness
@@ -146,13 +144,13 @@ describe('UploadProgressBanner', () => {
       />,
     );
     expect(screen.getByRole('table')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Retry failing.pdf' }));
-    expect(controller.retry).toHaveBeenCalledWith('1');
+    // Retry has been removed — re-uploading is the recovery path now.
+    expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss failing.pdf' }));
     expect(controller.dismiss).toHaveBeenCalledWith('1');
   });
 
-  it('exposes Retry all / Dismiss all when there are failures', async () => {
+  it('exposes Dismiss all (no Retry all) when there are failures', async () => {
     const controller = buildController();
     render(
       <Harness
@@ -164,8 +162,7 @@ describe('UploadProgressBanner', () => {
         ]}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Retry all' }));
-    expect(controller.retryAll).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry all' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss all failed' }));
     expect(controller.dismissFailures).toHaveBeenCalled();
   });

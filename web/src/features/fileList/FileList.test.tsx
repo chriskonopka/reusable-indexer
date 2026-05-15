@@ -223,16 +223,16 @@ describe('FileList', () => {
     expect(screen.getByText('brief.pdf')).toBeInTheDocument();
   });
 
-  it('renders the Doc type cell with the classified label, falling back to em dash for null', async () => {
+  it('renders the Type column from documentType, falling back to em dash for null', async () => {
     renderList({}, [
       makeDoc({ documentId: 'doc-1', fileName: 'reg.pdf', documentType: 'regulatory' }),
       makeDoc({ documentId: 'doc-2', fileName: 'unknown.pdf', documentType: null }),
     ]);
-    expect(await screen.findByRole('columnheader', { name: 'Doc type' })).toBeInTheDocument();
-    expect(screen.getByText('regulatory')).toBeInTheDocument();
-    // The null-doc row renders an em dash in the Doc type cell.
-    const dashCells = screen.getAllByText('—');
-    expect(dashCells.length).toBeGreaterThan(0);
+    expect(await screen.findByRole('columnheader', { name: /Type/ })).toBeInTheDocument();
+    // Scope to body cells — the filter dropdown also contains an option
+    // labelled "regulatory" and would otherwise match.
+    expect(screen.getByRole('cell', { name: 'regulatory' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '—' })).toBeInTheDocument();
   });
 
   it('has no axe violations in the loaded state', async () => {
@@ -414,9 +414,9 @@ describe('FileList', () => {
   // ── Toolbar / sort / filter / search / bulk-select ──────────────────────────
 
   const docs3 = (): DocumentMetadataResponse[] => [
-    makeDoc({ documentId: 'd-a', fileName: 'alpha.pdf', fileType: 'Contract', fileSizeBytes: 1024 * 100, updatedAt: '2026-05-04T10:00:00Z' }),
-    makeDoc({ documentId: 'd-b', fileName: 'beta.pdf', fileType: 'Financial', fileSizeBytes: 1024 * 1024, updatedAt: '2026-05-03T10:00:00Z' }),
-    makeDoc({ documentId: 'd-c', fileName: 'gamma.pdf', fileType: 'Contract', fileSizeBytes: 1024 * 50, updatedAt: '2026-05-05T10:00:00Z' }),
+    makeDoc({ documentId: 'd-a', fileName: 'alpha.pdf', documentType: 'regulatory', fileSizeBytes: 1024 * 100, updatedAt: '2026-05-04T10:00:00Z' }),
+    makeDoc({ documentId: 'd-b', fileName: 'beta.pdf', documentType: 'report', fileSizeBytes: 1024 * 1024, updatedAt: '2026-05-03T10:00:00Z' }),
+    makeDoc({ documentId: 'd-c', fileName: 'gamma.pdf', documentType: 'regulatory', fileSizeBytes: 1024 * 50, updatedAt: '2026-05-05T10:00:00Z' }),
   ];
 
   const getRowOrder = (): string[] =>
@@ -471,7 +471,7 @@ describe('FileList', () => {
     await screen.findByText('alpha.pdf');
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Filter by type' }),
-      'Financial',
+      'report',
     );
     expect(screen.queryByText('alpha.pdf')).not.toBeInTheDocument();
     expect(screen.getByText('beta.pdf')).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DocumentMetadataResponse, DocumentStatus, FileTypeCode } from '@shared/types';
+import type { DocumentMetadataResponse, DocumentStatus } from '@shared/types';
 import {
   CaretDown,
   CaretUp,
@@ -114,8 +114,17 @@ const compareDocs = (
       return a.fileName.localeCompare(b.fileName, undefined, { sensitivity: 'base' });
     case 'status':
       return STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
-    case 'type':
-      return a.fileType.localeCompare(b.fileType, undefined, { sensitivity: 'base' });
+    case 'type': {
+      // Sort by classifier-derived documentType, not the coarse fileType
+      // code. Nulls (classification skipped or pending) sort last so the
+      // user sees populated values first regardless of direction.
+      const aType = a.documentType;
+      const bType = b.documentType;
+      if (aType === null && bType === null) return 0;
+      if (aType === null) return 1;
+      if (bType === null) return -1;
+      return aType.localeCompare(bType, undefined, { sensitivity: 'base' });
+    }
     case 'size':
       return a.fileSizeBytes - b.fileSizeBytes;
     case 'updated':
@@ -310,7 +319,6 @@ const DocumentRowBase = ({
       <td className={styles.cell}>
         <StatusBadge status={doc.status} />
       </td>
-      <td className={[styles.cell, styles.cellMeta].join(' ')}>{doc.fileType}</td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>{doc.documentType ?? '—'}</td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>{formatBytes(doc.fileSizeBytes)}</td>
       <td className={[styles.cell, styles.cellMeta].join(' ')}>
@@ -371,7 +379,7 @@ export const FileList = ({
   // shared SelectionContext so it survives folder navigation and feeds the
   // `selection/changed` host event the consumer uses to scope chat retrieval.
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const [typeFilter, setTypeFilter] = useState<FileTypeCode | typeof TYPE_FILTER_ALL>(
+  const [typeFilter, setTypeFilter] = useState<string | typeof TYPE_FILTER_ALL>(
     TYPE_FILTER_ALL,
   );
   const [searchTerm, setSearchTerm] = useState('');
@@ -395,12 +403,16 @@ export const FileList = ({
     if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlightedDocumentId, data]);
 
-  // Distinct file types present in the loaded documents — drives the filter
-  // dropdown so we only ever offer types the user can actually find.
-  const availableTypes = useMemo<FileTypeCode[]>(() => {
+  // Distinct document types present in the loaded documents — drives the
+  // filter dropdown so we only ever offer types the user can actually find.
+  // Nulls (unclassified) are excluded; the user can still see those rows by
+  // not narrowing the filter at all.
+  const availableTypes = useMemo<string[]>(() => {
     if (!data) return [];
-    const set = new Set<FileTypeCode>();
-    data.documents.forEach((doc) => set.add(doc.fileType));
+    const set = new Set<string>();
+    data.documents.forEach((doc) => {
+      if (doc.documentType !== null) set.add(doc.documentType);
+    });
     return Array.from(set).sort();
   }, [data]);
 
@@ -410,7 +422,7 @@ export const FileList = ({
     if (!data) return [];
     let docs = data.documents;
     if (typeFilter !== TYPE_FILTER_ALL) {
-      docs = docs.filter((doc) => doc.fileType === typeFilter);
+      docs = docs.filter((doc) => doc.documentType === typeFilter);
     }
     const search = debouncedSearch.trim().toLowerCase();
     if (search) {
@@ -621,9 +633,7 @@ export const FileList = ({
               className={styles.filterSelect}
               aria-label="Filter by type"
               value={typeFilter}
-              onChange={(event) =>
-                setTypeFilter(event.target.value as FileTypeCode | typeof TYPE_FILTER_ALL)
-              }
+              onChange={(event) => setTypeFilter(event.target.value)}
             >
               <option value={TYPE_FILTER_ALL}>All types</option>
               {availableTypes.map((type) => (
@@ -712,12 +722,6 @@ export const FileList = ({
                     onSortChange={handleSortChange}
                     className={styles.cellMeta}
                   />
-                  <th
-                    className={[styles.headerCell, styles.cellMeta].join(' ')}
-                    scope="col"
-                  >
-                    Doc type
-                  </th>
                   <SortHeader
                     column="size"
                     label="Size"

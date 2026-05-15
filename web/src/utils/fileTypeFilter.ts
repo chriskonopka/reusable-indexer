@@ -53,6 +53,18 @@ const EXTENSION_ALLOWLIST: Record<string, AllowlistEntry> = {
   },
   html: { contentType: 'text/html', fileTypeCode: 'Other' },
   htm: { contentType: 'text/html', fileTypeCode: 'Other' },
+
+  // Plain-text formats — server-side ingestion was extended 2026-05-15.
+  md: { contentType: 'text/markdown', fileTypeCode: 'Other' },
+  txt: { contentType: 'text/plain', fileTypeCode: 'Other' },
+  log: { contentType: 'text/plain', fileTypeCode: 'Other' },
+  rtf: { contentType: 'application/rtf', fileTypeCode: 'Other' },
+
+  // Legacy Office (pre-OOXML). Mirrors the *.x equivalents above; xls
+  // inherits the Financial default to stay aligned with xlsx.
+  doc: { contentType: 'application/msword', fileTypeCode: 'Other' },
+  xls: { contentType: 'application/vnd.ms-excel', fileTypeCode: 'Financial' },
+  ppt: { contentType: 'application/vnd.ms-powerpoint', fileTypeCode: 'Other' },
 };
 
 const extensionOf = (name: string): string => {

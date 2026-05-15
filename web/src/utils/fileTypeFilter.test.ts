@@ -52,7 +52,8 @@ describe('classify', () => {
   });
 
   it('rejects unsupported extensions even when MIME looks plausible', () => {
-    const result = classify({ name: 'note.txt', type: 'text/plain', size: 100 });
+    // .zip is archive, not document — stays unambiguously off the allowlist.
+    const result = classify({ name: 'bundle.zip', type: 'application/zip', size: 100 });
     expect(result.kind).toBe('unsupported');
   });
 
@@ -66,5 +67,69 @@ describe('classify', () => {
     expect(classify({ name: 'image.PNG', type: 'image/png', size: 100 }).kind).toBe(
       'supported',
     );
+  });
+
+  // ── New plain-text extensions ────────────────────────────────────────────
+
+  it('accepts .md as text/markdown', () => {
+    expect(classify({ name: 'notes.md', type: 'text/markdown', size: 100 })).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'text/markdown',
+    });
+  });
+
+  it('accepts .txt as text/plain', () => {
+    expect(classify({ name: 'note.txt', type: 'text/plain', size: 100 })).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'text/plain',
+    });
+  });
+
+  it('accepts .log as text/plain', () => {
+    expect(classify({ name: 'app.log', type: 'text/plain', size: 100 })).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'text/plain',
+    });
+  });
+
+  it('accepts .rtf as application/rtf', () => {
+    expect(classify({ name: 'memo.rtf', type: 'application/rtf', size: 100 })).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'application/rtf',
+    });
+  });
+
+  // ── New legacy-Office extensions ─────────────────────────────────────────
+
+  it('accepts .doc as application/msword', () => {
+    expect(classify({ name: 'contract.doc', type: 'application/msword', size: 100 })).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'application/msword',
+    });
+  });
+
+  it('accepts .xls as Financial (mirrors .xlsx default)', () => {
+    expect(
+      classify({ name: 'ledger.xls', type: 'application/vnd.ms-excel', size: 100 }),
+    ).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Financial',
+      contentType: 'application/vnd.ms-excel',
+    });
+  });
+
+  it('accepts .ppt as application/vnd.ms-powerpoint', () => {
+    expect(
+      classify({ name: 'deck.ppt', type: 'application/vnd.ms-powerpoint', size: 100 }),
+    ).toEqual({
+      kind: 'supported',
+      fileTypeCode: 'Other',
+      contentType: 'application/vnd.ms-powerpoint',
+    });
   });
 });

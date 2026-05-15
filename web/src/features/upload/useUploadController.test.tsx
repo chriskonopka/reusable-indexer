@@ -200,7 +200,8 @@ describe('useUploadController', () => {
   it('rejects unsupported extensions client-side without hitting POST /documents', async () => {
     const mock = installFetch({ acceptedIds: [] });
     render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
-    const f = new File(['hi'], 'a.txt', { type: 'text/plain' });
+    // .zip is archive, not document — stays off the allowlist.
+    const f = new File(['hi'], 'a.zip', { type: 'application/zip' });
 
     await act(async () => {
       await captured.controller!.acceptDrop(

@@ -62,10 +62,11 @@ test.describe('Upload pipeline — S3 user flow', () => {
   test('classifies unsupported extensions as Skipped', async ({ page }) => {
     await createCollection(page);
     const fileInput = page.getByLabel('Add files');
+    // .zip is archive, not document — stays off the EXTENSION_ALLOWLIST.
     await fileInput.setInputFiles({
-      name: 'note.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('hello'),
+      name: 'bundle.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from('PK stub'),
     });
     const banner = page.getByRole('region', { name: 'Upload progress' });
     await expect(banner).toBeVisible();

@@ -652,6 +652,70 @@ describe('useUploadController — indexed-fade gating', () => {
     expect(captured.state!.files[0]?.status).toBe('Indexed');
   });
 
+  it('keeps polling while the server aggregate is InProgress even after every file reaches Indexed', async () => {
+    // Regression: previously polling stopped the moment no client-side file
+    // was Submitted/Indexing, so a poll that reported every file Indexed while
+    // the server's aggregate was still InProgress would leave the folder tree
+    // / file-list caches stale forever — reconcileStatus only invalidates on
+    // the aggregate flip to Completed/CompletedWithErrors.
+    jest.useRealTimers();
+    const mock = jest.fn(async (input: RequestInfo, init?: RequestInit): Promise<Response> => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      const path = url.replace(/^https?:\/\/[^/]+/, '');
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (method === 'POST' && /\/batches\/[^/]+\/status$/.test(path)) {
+        return ok(200, {
+          batchId: 'b1',
+          status: 'Completed',
+          totalDocuments: 1,
+          documents: [
+            { documentId: 'doc-a', status: 'Ready', failureReason: null },
+          ],
+        } satisfies BatchStatusResponse);
+      }
+      return new Response('unhandled', { status: 404 });
+    });
+    global.fetch = mock as unknown as typeof fetch;
+
+    render(
+      wrap(
+        <FadeProbe
+          onMount={(dispatch) => {
+            captured.dispatch = dispatch;
+          }}
+          onState={(state) => {
+            captured.state = state;
+          }}
+        />,
+      ),
+    );
+
+    act(() => {
+      captured.dispatch!({
+        type: 'START_SESSION',
+        targetDocumentSetId: 'ds',
+        files: [buildIndexedFile('a')],
+      });
+      captured.dispatch!({ type: 'SET_BATCH_ID', batchId: 'b1' });
+      // Server has not yet flipped the aggregate to Completed even though the
+      // client-side file is already Indexed — the exact race that caused the
+      // background file table to stop refreshing.
+      captured.dispatch!({ type: 'SET_AGGREGATE', status: 'InProgress' });
+    });
+
+    await waitFor(() => {
+      const statusCalls = mock.mock.calls.filter((call) =>
+        /\/batches\/[^/]+\/status$/.test(call[0] as string),
+      );
+      expect(statusCalls.length).toBeGreaterThan(0);
+    });
+    // After the poll resolves, reconcileStatus should flip aggregate to
+    // Completed — which is the signal the folder-cache invalidation keys off.
+    await waitFor(() => {
+      expect(captured.state!.aggregateStatus).toBe('Completed');
+    });
+  });
+
   it('dismisses Indexed rows after fade once the batch is Completed', () => {
     render(
       wrap(

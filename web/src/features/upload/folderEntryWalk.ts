@@ -104,30 +104,43 @@ export const walkDataTransfer = async (
 ): Promise<DroppedFile[]> => {
   const items = dataTransfer.items;
   if (items && items.length > 0) {
-    const seen = new Set<string>();
-    const collected: DroppedFile[] = [];
+    // Snapshot every item's entry (and fallback file) synchronously before
+    // we touch `await`. `DataTransferItem` references become unusable once
+    // the drop handler yields the event loop — browsers invalidate the slot
+    // — so calling webkitGetAsEntry() on the second item after awaiting the
+    // first walk silently returns null and every file after the first gets
+    // dropped. Dropping a folder appeared to work only because it's a single
+    // item whose recursive walk holds a live FileSystemDirectoryEntry.
+    const snapshots: Array<{
+      entry: FsEntryShape | null;
+      fallback: File | null;
+    }> = [];
     for (const item of Array.from(items)) {
       if (item.kind !== 'file') continue;
-      // `webkitGetAsEntry` is not standardized but is implemented in
-      // every browser this project supports (web-browser-support.md).
       const entry =
         typeof (item as { webkitGetAsEntry?: () => FsEntryShape | null })
           .webkitGetAsEntry === 'function'
           ? (item as { webkitGetAsEntry: () => FsEntryShape | null }).webkitGetAsEntry()
           : null;
-      if (entry) {
-        const dropped = await walkEntry(entry, '');
-        for (const drop of dropped) {
-          if (seen.has(drop.relativePath)) continue;
-          seen.add(drop.relativePath);
-          collected.push(drop);
-        }
-      } else {
-        const fallback = item.getAsFile?.();
-        if (fallback && !seen.has(fallback.name)) {
-          seen.add(fallback.name);
-          collected.push({ file: fallback, relativePath: fallback.name });
-        }
+      const fallback = item.getAsFile?.() ?? null;
+      snapshots.push({ entry, fallback });
+    }
+
+    const nestedLists = await Promise.all(
+      snapshots.map(({ entry, fallback }) => {
+        if (entry) return walkEntry(entry, '');
+        if (fallback) return Promise.resolve([{ file: fallback, relativePath: fallback.name }]);
+        return Promise.resolve([] as DroppedFile[]);
+      }),
+    );
+
+    const seen = new Set<string>();
+    const collected: DroppedFile[] = [];
+    for (const list of nestedLists) {
+      for (const drop of list) {
+        if (seen.has(drop.relativePath)) continue;
+        seen.add(drop.relativePath);
+        collected.push(drop);
       }
     }
     return collected;

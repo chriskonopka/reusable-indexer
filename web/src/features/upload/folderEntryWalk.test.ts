@@ -98,6 +98,44 @@ describe('walkDataTransfer', () => {
     const result = await walkDataTransfer(makeDataTransfer(items));
     expect(result).toHaveLength(1);
   });
+
+  it('processes every dropped file when multiple plain files are dropped at once', async () => {
+    // Regression: browsers invalidate DataTransferItem refs once the drop
+    // handler yields the event loop, so any `webkitGetAsEntry()` call made
+    // after an `await` returns null. Previously this caused multi-file drops
+    // to silently drop everything after the first file; folder drops worked
+    // only because they're a single item.
+    const fileA = fakeFile('A.pdf');
+    const fileB = fakeFile('B.pdf');
+    const fileC = fakeFile('C.pdf');
+    const items = [
+      makeItem(makeFileEntry('A.pdf', fileA)),
+      makeItem(makeFileEntry('B.pdf', fileB)),
+      makeItem(makeFileEntry('C.pdf', fileC)),
+    ];
+
+    // Model the browser invalidating items the moment the drop handler yields
+    // the event loop. The queued microtask fires after the synchronous body of
+    // walkDataTransfer runs, so the fix (which snapshots entries up front) sees
+    // all three; the previous loop-with-await structure would only see the
+    // first because every later iteration's webkitGetAsEntry would return null.
+    let invalidated = false;
+    queueMicrotask(() => {
+      invalidated = true;
+    });
+    for (const item of items) {
+      const target = item as unknown as { webkitGetAsEntry: () => unknown };
+      const original = target.webkitGetAsEntry;
+      target.webkitGetAsEntry = () => (invalidated ? null : original.call(item));
+    }
+
+    const result = await walkDataTransfer(makeDataTransfer(items));
+    expect(result.map((entry) => entry.relativePath)).toEqual([
+      'A.pdf',
+      'B.pdf',
+      'C.pdf',
+    ]);
+  });
 });
 
 describe('fromFileList', () => {

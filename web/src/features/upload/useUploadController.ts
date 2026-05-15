@@ -449,18 +449,23 @@ export const useUploadController = (
     }
   }, [client, uploadDocumentSetId, state.batchId, reconcileStatus]);
 
-  const stillIndexing = state.files.some(
-    (file) =>
-      file.documentId !== null &&
-      (file.status === 'Submitted' || file.status === 'Indexing'),
-  );
+  // Per web-document-upload.md §5, poll until the server's aggregate status is
+  // terminal. Previously this gated on whether any client-side file was still
+  // Submitted/Indexing — but the client can observe every file as Indexed on
+  // the poll *before* the server flips the aggregate to Completed. When that
+  // happens the polling loop stops, the invalidation guard inside
+  // reconcileStatus (which keys off aggregate, not file status) never fires,
+  // and the folder tree / file list stay stale until the user manually
+  // navigates.
+  const anySubmittedYet = state.files.some((file) => file.documentId !== null);
 
   usePolling(pollOnce, {
     intervalMs: POLLING_INTERVAL_MS,
     enabled:
       uploadDocumentSetId !== null &&
       state.batchId !== null &&
-      stillIndexing,
+      anySubmittedYet &&
+      isUploadInFlight(state.aggregateStatus),
     pauseOnHidden: true,
   });
 

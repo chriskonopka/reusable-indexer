@@ -123,13 +123,16 @@ describe('classify', () => {
     });
   });
 
-  it('accepts .ppt as application/vnd.ms-powerpoint', () => {
+  it('rejects PowerPoint (.ppt and .pptx) — server-side ingestion does not extract them', () => {
     expect(
-      classify({ name: 'deck.ppt', type: 'application/vnd.ms-powerpoint', size: 100 }),
-    ).toEqual({
-      kind: 'supported',
-      fileTypeCode: 'Other',
-      contentType: 'application/vnd.ms-powerpoint',
-    });
+      classify({ name: 'deck.ppt', type: 'application/vnd.ms-powerpoint', size: 100 }).kind,
+    ).toBe('unsupported');
+    expect(
+      classify({
+        name: 'deck.pptx',
+        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        size: 100,
+      }).kind,
+    ).toBe('unsupported');
   });
 });

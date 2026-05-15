@@ -46,11 +46,6 @@ const EXTENSION_ALLOWLIST: Record<string, AllowlistEntry> = {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     fileTypeCode: 'Financial',
   },
-  pptx: {
-    contentType:
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    fileTypeCode: 'Other',
-  },
   html: { contentType: 'text/html', fileTypeCode: 'Other' },
   htm: { contentType: 'text/html', fileTypeCode: 'Other' },
 
@@ -60,11 +55,11 @@ const EXTENSION_ALLOWLIST: Record<string, AllowlistEntry> = {
   log: { contentType: 'text/plain', fileTypeCode: 'Other' },
   rtf: { contentType: 'application/rtf', fileTypeCode: 'Other' },
 
-  // Legacy Office (pre-OOXML). Mirrors the *.x equivalents above; xls
-  // inherits the Financial default to stay aligned with xlsx.
+  // Legacy Office (pre-OOXML). xls inherits the Financial default to
+  // stay aligned with xlsx. PowerPoint (.ppt / .pptx) is intentionally
+  // excluded — server-side ingestion does not currently extract them.
   doc: { contentType: 'application/msword', fileTypeCode: 'Other' },
   xls: { contentType: 'application/vnd.ms-excel', fileTypeCode: 'Financial' },
-  ppt: { contentType: 'application/vnd.ms-powerpoint', fileTypeCode: 'Other' },
 };
 
 const extensionOf = (name: string): string => {

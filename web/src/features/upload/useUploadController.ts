@@ -6,6 +6,7 @@ import type {
   UploadFile,
 } from '@shared/types';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useHost } from '../../host/useHost';
 import { usePolling } from '../../hooks/usePolling';
 import { useToast } from '../../hooks/useToast';
 import { ApiClientError } from '../../api/client';
@@ -44,6 +45,16 @@ const CONCURRENT_UPLOADS = 5;
 // "every few seconds" without a fixed value; we pin 2 s here per the
 // Step 1 architecture decision.
 const POLLING_INTERVAL_MS = 2000;
+
+// Auto-retry for transient `POST /documents` failures (network drops,
+// 5xx, `blob-unavailable`). Common on corporate networks with TLS-
+// inspecting proxies that occasionally poison an HTTP/2 multiplexed
+// record. The spec is silent on retries; matches the post-stream
+// `/history` retry budget on the consuming app (3 retries × 500 ms
+// exponential).
+const UPLOAD_MAX_RETRIES = 3;
+const UPLOAD_RETRY_BASE_DELAY_MS = 500;
+const UPLOAD_RETRY_JITTER_RATIO = 0.25;
 
 // Time the green "Indexed" badge stays visible before fading from the
 // session view. Matches the per-row fade in spec 3.5.1.
@@ -118,6 +129,37 @@ const buildUploadFile = (
 const isApiError = (error: unknown): error is ApiClientError =>
   error instanceof ApiClientError;
 
+// Same transient classification used by `failureFromApi` for the
+// `retryable` flag — keep the two definitions in sync so the auto-retry
+// loop and the manual-retry flag agree on what's worth re-attempting.
+const isTransientUploadError = (error: unknown): boolean => {
+  if (isApiError(error)) {
+    const slug = error.normalized.type.split('/').pop() ?? '';
+    return (
+      error.normalized.status === 0 ||
+      error.normalized.status >= 500 ||
+      slug === 'blob-unavailable'
+    );
+  }
+  // Non-ApiClientError = the fetch itself rejected (TLS reset, DNS,
+  // AbortController, CORS). Treat as transient — the upload pump's
+  // outer catch still has the final say if the retry budget runs out.
+  return true;
+};
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+// Exponential backoff with ±25% jitter, indexed from 1 (first retry).
+// 1 → ~500 ms, 2 → ~1 s, 3 → ~2 s, all ±125 / 250 / 500 ms of noise.
+// Jitter spreads retries from a thundering herd of simultaneous
+// failures (e.g. an Azure Front Door blip) across the backoff window.
+const computeRetryDelayMs = (retryIndex: number): number => {
+  const base = UPLOAD_RETRY_BASE_DELAY_MS * 2 ** (retryIndex - 1);
+  const jitter = base * UPLOAD_RETRY_JITTER_RATIO * (Math.random() * 2 - 1);
+  return Math.max(0, Math.round(base + jitter));
+};
+
 const failureFromApi = (
   error: ApiClientError,
 ): {
@@ -172,6 +214,7 @@ export const useUploadController = (
   const client = useApiClient();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const host = useHost();
 
   // The collection the in-flight batch was started in. Different from the
   // `documentSetId` hook arg, which tracks the currently active collection.
@@ -243,19 +286,45 @@ export const useUploadController = (
         return;
       }
       try {
-        const accepted = await uploadDocument(client, {
-          documentSetId: uploadDocumentSetId,
-          batchId,
-          folderId: file.targetFolderId,
-          fileType: classification.fileTypeCode,
-          file: file.file,
-        });
+        // Retry transient failures up to UPLOAD_MAX_RETRIES times before
+        // surfacing the error to the user. Re-throws non-transient errors
+        // (permanent ApiClientError: duplicate, oversize, unsupported,
+        // forbidden, etc.) immediately so the existing dispatch path runs.
+        let accepted: Awaited<ReturnType<typeof uploadDocument>> | null = null;
+        for (let attempt = 0; attempt <= UPLOAD_MAX_RETRIES; attempt += 1) {
+          try {
+            accepted = await uploadDocument(client, {
+              documentSetId: uploadDocumentSetId,
+              batchId,
+              folderId: file.targetFolderId,
+              fileType: classification.fileTypeCode,
+              file: file.file,
+            });
+            break;
+          } catch (uploadError) {
+            const exhausted = attempt >= UPLOAD_MAX_RETRIES;
+            if (exhausted || !isTransientUploadError(uploadError)) throw uploadError;
+            host.appInsights?.trackEvent({
+              name: 'UploadTransientRetry',
+              properties: {
+                attempt: String(attempt + 1),
+                maxRetries: String(UPLOAD_MAX_RETRIES),
+                errorType: isApiError(uploadError)
+                  ? `api:${uploadError.normalized.status}`
+                  : 'network',
+              },
+            });
+            await sleep(computeRetryDelayMs(attempt + 1));
+          }
+        }
+        // accepted is non-null here — the only way to exit the loop without
+        // it set is via `throw`, which jumps to the outer catch below.
         dispatch({
           type: 'PATCH_FILE',
           clientId: file.clientId,
           patch: {
             status: 'Submitted',
-            documentId: accepted.documentId,
+            documentId: accepted!.documentId,
             failureReason: null,
             severity: null,
           },
@@ -289,7 +358,7 @@ export const useUploadController = (
         inFlightRef.current.delete(file.clientId);
       }
     },
-    [client, dispatch, uploadDocumentSetId],
+    [client, dispatch, uploadDocumentSetId, host.appInsights],
   );
 
   // The pump runs whenever the queue or the in-flight set changes. It picks
@@ -680,4 +749,7 @@ export const __TESTING__ = {
   CONCURRENT_UPLOADS,
   POLLING_INTERVAL_MS,
   INDEXED_FADE_MS,
+  UPLOAD_MAX_RETRIES,
+  UPLOAD_RETRY_BASE_DELAY_MS,
+  UPLOAD_RETRY_JITTER_RATIO,
 };

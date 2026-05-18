@@ -82,6 +82,12 @@ const problem = (status: number, slug: string, detail = 'err'): Response =>
 interface FetchScenario {
   acceptedIds: string[];
   failOnce?: 'transient' | 'duplicate' | 'unsupported' | 'too-large' | 'permanent-other';
+  // Fail the first N `POST /documents` attempts with a 502 transient error,
+  // then return the next acceptedId on attempt N+1. Drives the auto-retry
+  // path: with `failTimesTransient: 1` the file ends Submitted on the first
+  // retry; with `failTimesTransient: 4` (1 initial + 3 retries) the budget
+  // is exhausted and the file ends Failed (retryable).
+  failTimesTransient?: number;
   // Sequence the status poll responses; index N returned on the (N+1)th call.
   statusResponses?: BatchStatusResponse[];
 }
@@ -91,6 +97,7 @@ const installFetch = (scenario: FetchScenario): jest.Mock => {
   let postedDocs = 0;
   let statusCalls = 0;
   let failConsumed = false;
+  let transientFailuresLeft = scenario.failTimesTransient ?? 0;
 
   const mock = jest.fn(async (input: RequestInfo, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : (input as Request).url;
@@ -125,6 +132,10 @@ const installFetch = (scenario: FetchScenario): jest.Mock => {
     }
 
     if (method === 'POST' && path === '/documents') {
+      if (transientFailuresLeft > 0) {
+        transientFailuresLeft -= 1;
+        return problem(502, 'blob-unavailable', 'Blob temporarily unavailable.');
+      }
       if (scenario.failOnce && !failConsumed) {
         failConsumed = true;
         if (scenario.failOnce === 'transient') {
@@ -253,8 +264,11 @@ describe('useUploadController', () => {
     expect(captured.state!.files).toHaveLength(0);
   });
 
-  it('marks 502 transient failures retryable and 400 unsupported as Skip', async () => {
-    installFetch({ acceptedIds: ['doc-1'], failOnce: 'transient' });
+  it('auto-retries a 502 transient failure and reaches Submitted on the next attempt', async () => {
+    // Single transient failure on attempt 1 (real-world: TLS proxy hiccup,
+    // blob warm-up, AFD blip). The retry loop catches it, waits ~500 ms, and
+    // the next POST returns the doc id — file ends Submitted, never Failed.
+    const mock = installFetch({ acceptedIds: ['doc-1'], failTimesTransient: 1 });
     render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
     const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
 
@@ -265,12 +279,51 @@ describe('useUploadController', () => {
       );
     });
 
-    await waitFor(() => {
-      expect(captured.state!.files[0]?.status).toBe('Failed');
-      expect(captured.state!.files[0]?.retryable).toBe(true);
-      expect(captured.state!.files[0]?.severity).toBe('Fail');
-    });
+    await waitFor(
+      () => {
+        expect(captured.state!.files[0]?.status).toBe('Submitted');
+        expect(captured.state!.files[0]?.documentId).toBe('doc-1');
+      },
+      { timeout: 4000 },
+    );
+    const documentsCalls = mock.mock.calls.filter(
+      (call) => (call[0] as string).endsWith('/documents'),
+    );
+    expect(documentsCalls.length).toBe(2); // 1 fail + 1 retry success
   });
+
+  it('exhausts the retry budget on persistent transient failures and marks Failed (retryable)', async () => {
+    // 1 initial attempt + UPLOAD_MAX_RETRIES (3) = 4 attempts total, all 502.
+    // The pump gives up after the budget runs out and marks the row Failed
+    // with retryable=true so a future manual-retry / banner action can pick
+    // it up. Real-timer cost ≈ 500 + 1000 + 2000 ms backoff = ~3.5 s.
+    const mock = installFetch({
+      acceptedIds: ['doc-1'],
+      failTimesTransient: 1 + __TESTING__.UPLOAD_MAX_RETRIES,
+    });
+    render(wrap(<Probe documentSetId="ds" onMount={onMount} onState={onState} />));
+    const f = new File(['hi'], 'a.pdf', { type: 'application/pdf' });
+
+    await act(async () => {
+      await captured.controller!.acceptDrop(
+        { fileList: buildFileList([f]) },
+        { rootFolderId: null },
+      );
+    });
+
+    await waitFor(
+      () => {
+        expect(captured.state!.files[0]?.status).toBe('Failed');
+        expect(captured.state!.files[0]?.retryable).toBe(true);
+        expect(captured.state!.files[0]?.severity).toBe('Fail');
+      },
+      { timeout: 10000 },
+    );
+    const documentsCalls = mock.mock.calls.filter(
+      (call) => (call[0] as string).endsWith('/documents'),
+    );
+    expect(documentsCalls.length).toBe(1 + __TESTING__.UPLOAD_MAX_RETRIES);
+  }, 15000);
 
   it('marks 409 duplicate as Duplicate (Skip severity, not retryable)', async () => {
     installFetch({ acceptedIds: ['doc-1'], failOnce: 'duplicate' });

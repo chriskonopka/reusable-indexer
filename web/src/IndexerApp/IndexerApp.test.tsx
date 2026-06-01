@@ -129,6 +129,89 @@ describe('IndexerApp scaffold', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  describe('stale active collection self-heal', () => {
+    // A collection that exists in the list but whose folder/contents listing
+    // 404s (deleted or unshared since the list was fetched). The indexer must
+    // deselect it and re-emit collection/activated:null so the host drops its
+    // /c/{id} deep-link — rather than dead-ending on "Could not load…".
+    const installStaleCollectionFetch = () => {
+      global.fetch = jest.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url.endsWith('/document-sets/list') && method === 'POST') {
+          return buildResponse(200, {
+            items: [
+              {
+                documentSetId: 'ds-1',
+                name: 'Gone collection',
+                accessRole: 'Owner',
+                updatedAt: '2026-05-04T12:00:00Z',
+              },
+            ],
+            totalCount: 1,
+            page: 1,
+            pageSize: 100,
+          });
+        }
+        // The collection is gone: every scoped listing 404s.
+        if (url.includes('/document-sets/ds-1/folders')) {
+          return buildResponse(404, {
+            type: 'about:blank',
+            title: 'not found',
+            status: 404,
+            detail: 'Document set not found.',
+          });
+        }
+        if (url.includes('/contents') && method === 'POST') {
+          return buildResponse(404, {
+            type: 'about:blank',
+            title: 'not found',
+            status: 404,
+            detail: 'Document set not found.',
+          });
+        }
+        if (url.endsWith('/shares/list') && method === 'POST') {
+          return buildResponse(200, { items: [], totalCount: 0, page: 1, pageSize: 100 });
+        }
+        return buildResponse(200, { items: [], totalCount: 0, page: 1, pageSize: 100 });
+      }) as unknown as typeof fetch;
+    };
+
+    it('deselects the collection and re-emits collection/activated:null when its listing 404s', async () => {
+      installStaleCollectionFetch();
+      const events: IndexerEvent[] = [];
+      const ref = createRef<IndexerHandle>();
+      render(<IndexerApp ref={ref} {...makeHost({ onEvent: (e) => events.push(e) })} />);
+
+      // Wait for the collection list to populate the query cache so the
+      // imperative select can resolve the access role.
+      await screen.findByText('Gone collection');
+
+      await act(async () => {
+        ref.current?.selectCollection('ds-1');
+      });
+
+      // The folder/file listing 404s → the user sees a non-blocking notice...
+      await screen.findByText(/Pick another from the list/i);
+
+      // ...and the indexer self-heals: it emits collection/activated for ds-1,
+      // then null once the stale listing is detected.
+      await waitFor(() => {
+        const activatedDs1 = events.findIndex(
+          (e) => e.type === 'collection/activated' && e.documentSetId === 'ds-1',
+        );
+        expect(activatedDs1).toBeGreaterThanOrEqual(0);
+        const clearedAfter = events
+          .slice(activatedDs1 + 1)
+          .some((e) => e.type === 'collection/activated' && e.documentSetId === null);
+        expect(clearedAfter).toBe(true);
+      });
+
+      // The main pane falls back to the empty state.
+      expect(await screen.findByText('Select a collection')).toBeInTheDocument();
+    });
+  });
+
   describe('mobile sidebar hamburger', () => {
     it('renders the hamburger with closed initial state and toggles aria-expanded', async () => {
       render(<IndexerApp {...makeHost()} />);

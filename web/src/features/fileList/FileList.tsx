@@ -19,6 +19,7 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from '../../components/Mod
 import { Button } from '../../components/Button';
 import { useToast } from '../../hooks/useToast';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useStaleDocsetRecovery } from '../../hooks/useStaleDocsetRecovery';
 import { useEmitEvent } from '../../host/useHost';
 import { relativeTimeLabel } from '../../utils/dateLabels';
 import { formatBytes } from '../../utils/fileSize';
@@ -357,6 +358,12 @@ export interface FileListProps {
   /** When set, the matching row gets a transient highlight class and is
    *  scrolled into view. Driven by RootShell.revealDocument(). */
   highlightedDocumentId?: string | null;
+  /**
+   * Called when the contents request returns 403/404 — the active collection
+   * is gone (deleted or unshared). The owner deselects the collection so the
+   * indexer emits `collection/activated: null`. See useStaleDocsetRecovery.
+   */
+  onStaleDocset?: () => void;
 }
 
 export const FileList = ({
@@ -366,8 +373,10 @@ export const FileList = ({
   onDocumentSelect,
   isReadOnly,
   highlightedDocumentId = null,
+  onStaleDocset,
 }: FileListProps) => {
-  const { data, isLoading, isError } = useBrowseContents(documentSetId, folderId);
+  const { data, isLoading, isError, error } = useBrowseContents(documentSetId, folderId);
+  const isStaleDocset = useStaleDocsetRecovery(error, onStaleDocset);
   const deleteMutation = useDeleteDocument();
   const { push: pushToast } = useToast();
   const emitEvent = useEmitEvent();
@@ -593,6 +602,17 @@ export const FileList = ({
           <Skeleton variant="row" />
           <Skeleton variant="row" />
         </div>
+      );
+    }
+
+    if (isStaleDocset) {
+      // The active collection is gone; onStaleDocset deselects it and the pane
+      // unmounts momentarily. Show a calm notice during that transition rather
+      // than the alarming generic error.
+      return (
+        <p className={styles.errorMsg} role="status">
+          This collection is no longer available.
+        </p>
       );
     }
 

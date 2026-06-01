@@ -94,6 +94,10 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
   const [highlightedDocumentId, setHighlightedDocumentId] = useState<string | null>(null);
   const folderTreeRef = useRef<FolderTreeHandle>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards against a double stale-collection recovery: the folder tree and the
+  // file list can both 403/404 in the same commit, and each fires onStaleDocset.
+  // We act once per stale documentSetId. Reset when the active collection changes.
+  const staleHandledRef = useRef<string | null>(null);
   const [failurePopoverFolderId, setFailurePopoverFolderId] = useState<
     string | null | undefined
   >(undefined);
@@ -119,7 +123,23 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
     setHighlightedDocumentId(null);
     setFailurePopoverFolderId(undefined);
     setMobileSidebarOpen(false);
+    staleHandledRef.current = null;
   }, [documentSetId]);
+
+  // Self-heal when the active collection's listing reports it is gone (deleted
+  // or unshared): deselect it, which clears the persisted last-active id and
+  // emits `collection/activated: null` so the host drops its `/c/{id}` deep-link.
+  // Without this, the folder/file panes dead-ended on "Could not load…" and a
+  // page refresh re-loaded the same dead collection — only re-login recovered.
+  const handleStaleDocset = useCallback(() => {
+    if (!documentSetId || staleHandledRef.current === documentSetId) return;
+    staleHandledRef.current = documentSetId;
+    toast.push(
+      'This collection is no longer available — it may have been deleted or unshared. Pick another from the list.',
+      'error',
+    );
+    select(null);
+  }, [documentSetId, select, toast]);
 
   // Clear any pending highlight timer on unmount.
   useEffect(() => {
@@ -307,6 +327,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
                       isReadOnly={isReadOnly}
                       aggregateStatuses={folderAggregates}
                       onFailureBadgeClick={handleFailureBadgeClick}
+                      onStaleDocset={handleStaleDocset}
                     />
                   </div>
                   <div className={styles.contentPane}>
@@ -317,6 +338,7 @@ export const RootShell = forwardRef<IndexerHandle>((_props, ref) => {
                       onDocumentSelect={setSelectedDocumentId}
                       isReadOnly={isReadOnly}
                       highlightedDocumentId={highlightedDocumentId}
+                      onStaleDocset={handleStaleDocset}
                     />
                   </div>
                 </div>

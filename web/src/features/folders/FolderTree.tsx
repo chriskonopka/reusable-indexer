@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Pill } from '../../components/Pill';
 import { useToast } from '../../hooks/useToast';
 import { useMoveDocument } from '../../hooks/useMoveDocument';
+import { useStaleDocsetRecovery } from '../../hooks/useStaleDocsetRecovery';
 import {
   DND_MIME_DOCUMENT_ID,
   DND_MIME_DOCUMENT_SOURCE_FOLDER,
@@ -115,6 +116,13 @@ export interface FolderTreeProps {
   aggregateStatuses?: Map<string | null, FolderAggregateStatus>;
   /** Called when a folder's failure pill is clicked. Spec 3.6.2. */
   onFailureBadgeClick?: (folderId: string | null) => void;
+  /**
+   * Called when the tree request returns 403/404 — the active collection is
+   * gone (deleted or unshared). The owner deselects the collection so the
+   * indexer emits `collection/activated: null` and the host clears its
+   * deep-link. See useStaleDocsetRecovery.
+   */
+  onStaleDocset?: () => void;
 }
 
 const aggregatePillFor = (
@@ -449,10 +457,12 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
       isReadOnly,
       aggregateStatuses,
       onFailureBadgeClick,
+      onStaleDocset,
     },
     ref,
   ) => {
-    const { data: treeData, isLoading, isError } = useFolderTree(documentSetId);
+    const { data: treeData, isLoading, isError, error } = useFolderTree(documentSetId);
+    const isStaleDocset = useStaleDocsetRecovery(error, onStaleDocset);
     const [treeState, dispatchTree] = useFolderTreeState(documentSetId);
 
     const createMutation = useCreateFolder();
@@ -705,6 +715,19 @@ export const FolderTree = forwardRef<FolderTreeHandle, FolderTreeProps>(
           <Skeleton variant="row" />
           <Skeleton variant="row" />
           <Skeleton variant="row" />
+        </nav>
+      );
+    }
+
+    if (isStaleDocset) {
+      // The active collection is gone; onStaleDocset deselects it and the
+      // pane unmounts momentarily. Show a calm notice (not the generic error)
+      // during that transition rather than the alarming "Could not load".
+      return (
+        <nav aria-label="Folders" className={styles.tree}>
+          <p className={styles.errorMsg} role="status">
+            This collection is no longer available.
+          </p>
         </nav>
       );
     }

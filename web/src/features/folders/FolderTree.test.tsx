@@ -247,6 +247,62 @@ describe('FolderTree', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  // ── Stale collection (403 / 404) ──────────────────────────────────────────────
+
+  it('fires onStaleDocset and shows the unavailable notice on a 404', async () => {
+    global.fetch = jest.fn(async () => new Response(null, { status: 404 })) as unknown as typeof fetch;
+    const onStaleDocset = jest.fn();
+    render(
+      <Harness>
+        <FolderTree
+          documentSetId="ds-1"
+          activeFolderId={null}
+          onFolderSelect={() => {}}
+          isReadOnly={false}
+          onStaleDocset={onStaleDocset}
+        />
+      </Harness>,
+    );
+    expect(await screen.findByText('This collection is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load folders.')).not.toBeInTheDocument();
+    expect(onStaleDocset).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onStaleDocset on a 403', async () => {
+    global.fetch = jest.fn(async () => new Response(null, { status: 403 })) as unknown as typeof fetch;
+    const onStaleDocset = jest.fn();
+    render(
+      <Harness>
+        <FolderTree
+          documentSetId="ds-1"
+          activeFolderId={null}
+          onFolderSelect={() => {}}
+          isReadOnly={false}
+          onStaleDocset={onStaleDocset}
+        />
+      </Harness>,
+    );
+    await screen.findByText('This collection is no longer available.');
+    expect(onStaleDocset).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no axe violations in the stale-collection state', async () => {
+    global.fetch = jest.fn(async () => new Response(null, { status: 404 })) as unknown as typeof fetch;
+    const { container } = render(
+      <Harness>
+        <FolderTree
+          documentSetId="ds-1"
+          activeFolderId={null}
+          onFolderSelect={() => {}}
+          isReadOnly={false}
+          onStaleDocset={() => {}}
+        />
+      </Harness>,
+    );
+    await screen.findByText('This collection is no longer available.');
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
   // ── Empty state ─────────────────────────────────────────────────────────────
 
   it('shows the empty state when the tree has no roots', async () => {
